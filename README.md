@@ -1,6 +1,6 @@
 # 数据备份与还原系统
 
-将目录树打包、压缩、加密为单个 `.bak` 备份文件，并可完整还原（含元数据与特殊文件）。
+将目录树打包、压缩、加密为单个 `.bak` 备份文件，并可完整还原（含元数据与特殊文件）。支持**单机模式**和**网络（网盘）模式**。
 
 ## 项目完成要求
 
@@ -17,6 +17,11 @@
 - [x] **特殊文件支持**：符号链接、管道 (FIFO)、块设备、字符设备
 - [x] **错误密码检测**：加密备份用错误密码还原时数据损坏（XOR/Vigenere 均为对称加密）
 - [x] **CMake 构建**：使用 CMake 3.16+ 管理项目
+- [x] **网络备份（网盘模式）**：客户端-服务器架构，支持远程备份/还原
+- [x] **用户管理**：注册、登录、salt+hash 密码认证
+- [x] **元数据管理**：服务器端记录每次备份的文件列表，支持备份历史查看
+- [x] **传输加密**：基于 XOR LCG 流密码的网络传输加密
+- [x] **跨机器通信**：服务器绑定 `0.0.0.0`，同一局域网/互联网的任意客户端均可连接
 
 ## 所需环境
 
@@ -34,14 +39,14 @@
 # 在项目根目录（backup/）下执行
 mkdir -p build && cd build
 cmake ..
-make
+make -j$(nproc)
 ```
 
 编译成功后，可执行文件为 `build/backup`。
 
 > **备选（直接 g++）**：
 > ```bash
-> g++ -std=c++17 -I include -o backup main.cpp src/core/*.cpp src/metadata/*.cpp src/pack/*.cpp src/compress/*.cpp src/encrypt/*.cpp
+> g++ -std=c++17 -I include -o backup main.cpp src/core/*.cpp src/metadata/*.cpp src/pack/*.cpp src/compress/*.cpp src/encrypt/*.cpp src/network/*.cpp
 > ```
 > 此方式生成的可执行文件在项目根目录 `./backup`。
 
@@ -50,11 +55,24 @@ make
 ### 命令行格式
 
 ```
+# 单机模式
 build/backup backup  <源目录>   <输出文件.bak> [选项]
 build/backup restore <备份文件> <目标目录>     [选项]
+
+# 网络模式（服务器）
+build/backup server start --port <端口> --storage <存储目录>
+
+# 网络模式（客户端）
+build/backup remote-backup  <源目录>   --server <host:port> --username <用户名> --password <密码> [选项]
+build/backup remote-restore <目标目录> --server <host:port> --username <用户名> --password <密码> [选项]
+build/backup remote-list              --server <host:port> --username <用户名> --password <密码>
+
+# 用户管理
+build/backup user register --server <host:port> --username <用户名> --password <密码>
+build/backup user login    --server <host:port> --username <用户名> --password <密码>
 ```
 
-### 选项
+### 单机模式选项
 
 | 选项 | 取值 | 说明 |
 |------|------|------|
@@ -66,7 +84,26 @@ build/backup restore <备份文件> <目标目录>     [选项]
 
 > **注意**：还原时无需指定 `--pack` / `--compress` / `--encrypt`，程序自动从备份文件头部读取。仅当备份时用了加密，还原时才需提供 `--password`。
 
+### 网络模式选项
+
+| 选项 | 取值 | 说明 |
+|------|------|------|
+| `--port` | 数字 | 服务器监听端口（默认 `8848`） |
+| `--storage` | 路径 | 服务器数据存储目录（默认 `./server_data`） |
+| `--server` | `host:port` | 服务器地址（必需） |
+| `--username` | 字符串 | 用户名（必需） |
+| `--password` | 字符串 | 服务器登录密码（必需） |
+| `--file-password` | 字符串 | 文件加密密码（对应单机模式的 `--password`） |
+| `--pack` | `tar` / `index` | 打包算法（远程备份时默认 `tar`） |
+| `--compress` | `rle` / `huffman` | 压缩算法（不指定 = 不压缩） |
+| `--encrypt` | `xor` / `vigenere` | 加密算法（不指定 = 不加密） |
+| `--backup-id` | 字符串 | 还原指定备份 ID（默认 = 最新备份） |
+
+> **注意区分两个密码**：`--password` 是服务器登录密码，`--file-password` 是 `.bak` 文件加解密密钥。
+
 ### 使用示例
+
+#### 单机模式
 
 ```bash
 # 只打包
@@ -87,16 +124,92 @@ build/backup restore <备份文件> <目标目录>     [选项]
 ./build/backup restore ./photos.bak /home/user/restored --password s3cur3!
 ```
 
+#### 网络模式（网盘模式）
+
+```bash
+# === 启动服务器（在服务器电脑上执行） ===
+./build/backup server start --port 8848 --storage ./server_data
+# 输出: Listening on 0.0.0.0:8848
+
+# === 用户注册（在任意客户端电脑上执行） ===
+./build/backup user register \
+    --server 192.168.1.100:8848 \
+    --username zaria --password mypass
+# 输出: User registered successfully.
+
+# === 远程备份 ===
+./build/backup remote-backup /home/user/documents \
+    --server 192.168.1.100:8848 \
+    --username zaria --password mypass \
+    --pack tar
+# 输出: Backup complete! ID: backup_000001
+
+# === 列出远程备份 ===
+./build/backup remote-list \
+    --server 192.168.1.100:8848 \
+    --username zaria --password mypass
+
+# === 远程还原 ===
+./build/backup remote-restore /home/user/restored \
+    --server 192.168.1.100:8848 \
+    --username zaria --password mypass
+
+# === 远程备份 + 文件加密 ===
+./build/backup remote-backup /home/user/photos \
+    --server 192.168.1.100:8848 \
+    --username zaria --password mypass \
+    --pack index --compress huffman --encrypt xor --file-password s3cur3!
+
+# === 远程还原（需提供文件密码） ===
+./build/backup remote-restore /home/user/restored \
+    --server 192.168.1.100:8848 \
+    --username zaria --password mypass \
+    --file-password s3cur3!
+```
+
+> **跨机器使用**：服务器绑定 `0.0.0.0`，同一 WiFi/局域网下的其他电脑将 `--server` 中的 IP 替换为服务器的局域网 IP（用 `ip addr` 查看）即可连接。如果连接被拒绝，检查防火墙（`sudo ufw allow 8848`）和路由器 AP 隔离设置。
+
+## 网络架构
+
+```
+┌──────────────────────────┐        TCP/8848       ┌──────────────────────────┐
+│   客户端 (任意电脑)         │ ◄──────────────────► │   服务器 (备份存储电脑)      │
+│                           │   自定义二进制协议      │                           │
+│   backup remote-backup    │                       │   backup server start     │
+│   backup remote-restore   │   传输加密 (XOR LCG)    │   绑定 0.0.0.0:8848       │
+│   backup remote-list      │                       │   fork() 多进程并发        │
+│   backup user register    │   salt+hash 认证       │   users.db 用户管理        │
+└──────────────────────────┘                       └──────────────────────────┘
+```
+
+**服务器存储结构**：
+```
+server_data/
+├── users.db                    # 用户数据库（salt + hash）
+└── <username>/
+    └── backup_000001/
+        ├── header.bin          # .bak 文件头部
+        ├── payload.bin         # .bak 载荷（打包/压缩/加密后）
+        └── metadata.bin        # 文件元数据列表（备份历史记录）
+```
+
 ### 测试
 
 项目提供了静态测试数据与手动测试步骤，详见 [`tests/README.md`](tests/README.md)。
 
 ```bash
-# 快速验证（在项目根目录执行）
+# 快速验证单机模式（在项目根目录执行）
 mkdir -p build && cd build && cmake .. && make -j$(nproc) && cd ..
 ./build/backup backup tests/testdata tests/output_tar.bak --pack tar
 ./build/backup restore tests/output_tar.bak tests/restored_tar
 diff -r tests/testdata tests/restored_tar
+
+# 快速验证网络模式
+./build/backup server start --port 8848 --storage /tmp/test_server &
+./build/backup user register --server 127.0.0.1:8848 --username test --password test
+./build/backup remote-backup tests/testdata --server 127.0.0.1:8848 --username test --password test --pack tar
+./build/backup remote-restore /tmp/test_restore --server 127.0.0.1:8848 --username test --password test
+diff -r tests/testdata /tmp/test_restore
 ```
 
 ## 支持的文件类型
@@ -140,6 +253,12 @@ diff -r tests/testdata tests/restored_tar
 | `xor` | LCG 伪随机密钥流（seed 从密码派生）+ 逐字节异或 | 任意长度 |
 | `vigenere` | 多表置换：`(明文 + 密钥[i % len]) mod 256` | 任意长度 |
 
+### 传输加密
+
+| 算法 | 原理 | 范围 |
+|------|------|------|
+| XOR LCG 流密码 | 从用户密码 + 服务器 salt 派生会话密钥，每消息独立 IV（序列号） | 网络传输层 |
+
 > 所有算法均为自实现，不依赖 zlib、OpenSSL 等第三方库。
 
 ## 备份文件格式
@@ -158,21 +277,52 @@ diff -r tests/testdata tests/restored_tar
 N+1–EOF        payload（经 打包→压缩→加密 处理后的数据）
 ```
 
+## 网络协议
+
+### 消息格式
+
+```
+字节偏移        内容
+────────────────────────────────────────
+0–1            type (消息类型，大端序 uint16)
+2–3            reserved (保留)
+4–7            payloadLen (载荷长度，大端序 uint32)
+8–N            payload (载荷)
+```
+
+### 认证流程
+
+```
+客户端                         服务器
+  │──── CLIENT_HELLO ─────────►│
+  │◄─── SERVER_HELLO ──────────│  (含 8 字节随机挑战码)
+  │                            │
+  │──── LOGIN_REQUEST ────────►│  (仅用户名)
+  │◄─── LOGIN_SALT ────────────│  (返回注册时的盐值)
+  │──── LOGIN_PROOF ──────────►│  (computeHash(password, salt))
+  │◄─── LOGIN_RESPONSE ────────│  (OK / 密码错误)
+  │                            │
+  │==== 后续通信（传输加密）=====│
+```
+
 ## 项目结构
 
 ```
 backup/
 ├── CMakeLists.txt
 ├── README.md
-├── main.cpp                          # CLI 入口
+├── main.cpp                          # CLI 入口（单机 + 网络）
 ├── include/
 │   ├── core/       FileInfo.h  FileScanner.h  BackupEngine.h  RestoreEngine.h
 │   ├── metadata/   MetadataSerializer.h  MetadataStore.h
 │   ├── pack/       IPackStrategy.h  TarPackStrategy.h  IndexPackStrategy.h  PackManager.h
 │   ├── compress/   ICompressStrategy.h  RleCompressStrategy.h  HuffmanCompressStrategy.h  CompressManager.h
-│   └── encrypt/    IEncryptStrategy.h  XorEncryptStrategy.h  VigenereEncryptStrategy.h  EncryptManager.h
+│   ├── encrypt/    IEncryptStrategy.h  XorEncryptStrategy.h  VigenereEncryptStrategy.h  EncryptManager.h
+│   └── network/    NetworkProtocol.h  NetworkSocket.h  UserManager.h  ServerStorage.h
+│                   TransportEncryptor.h  ServerSession.h  BackupServer.h
+│                   NetworkBackupClient.h  NetworkRestoreClient.h
 ├── src/           (与 include/ 一一对应的 .cpp 实现)
 └── tests/
-    ├── README.md              # 手动测试步骤（10 个场景）
+    ├── README.md              # 手动测试步骤（含网络功能测试）
     └── testdata/              # 静态测试数据（19 个条目，含特殊文件）
 ```

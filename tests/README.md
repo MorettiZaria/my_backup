@@ -28,14 +28,15 @@
 | `broken_link` | 符号链接 | → `/nonexistent/path` | 指向不存在目标的链接 |
 | `myfifo` | 管道 FIFO | — | 命名管道 |
 
-## 手动测试步骤
+---
+
+## 第一部分：单机模式测试
 
 在项目根目录（`backup/`）下执行：
 
 ### 1. 编译
 
 ```bash
-# 在项目根目录（backup/）下执行
 mkdir -p build && cd build && cmake .. && make -j$(nproc) && cd ..
 ```
 编译成功后，可执行文件位于 `build/backup`。
@@ -125,8 +126,218 @@ readlink tests/restored_tar/broken_link               # 应输出 /nonexistent/p
 cat tests/restored_bad/hello.txt
 ```
 
-### 清理
+---
+
+## 第二部分：网络模式（网盘模式）测试
+
+网络模式测试分为**同机器测试**（使用 `127.0.0.1`）和**跨机器测试**（使用局域网 IP）。
+
+### 前置：编译
 
 ```bash
+mkdir -p build && cd build && cmake .. && make -j$(nproc) && cd ..
+```
+
+### 测试 N1：服务器启动
+
+```bash
+# 启动服务器（后台运行）
+# 服务器绑定 0.0.0.0:18848，允许来自任何 IP 的连接
+./build/backup server start --port 18848 --storage /tmp/test_server_data &
+SERVER_PID=$!
+sleep 1
+
+# 验证服务器在运行
+kill -0 $SERVER_PID && echo "Server is running" || echo "Server failed to start"
+```
+
+### 测试 N2：用户注册与登录
+
+```bash
+# 注册新用户
+./build/backup user register \
+    --server 127.0.0.1:18848 \
+    --username testuser --password testpass
+# 预期: User registered successfully.
+
+# 重复注册（应失败）
+./build/backup user register \
+    --server 127.0.0.1:18848 \
+    --username testuser --password testpass
+# 预期: Error: registration failed (user may already exist).
+
+# 正确密码登录
+./build/backup user login \
+    --server 127.0.0.1:18848 \
+    --username testuser --password testpass
+# 预期: Login successful.
+
+# 错误密码登录（应失败）
+./build/backup user login \
+    --server 127.0.0.1:18848 \
+    --username testuser --password wrongpass
+# 预期: Error: login failed (wrong password?).
+```
+
+### 测试 N3：远程备份
+
+```bash
+# 远程备份（打包 = tar）
+./build/backup remote-backup tests/testdata \
+    --server 127.0.0.1:18848 \
+    --username testuser --password testpass \
+    --pack tar
+# 预期: Backup complete! ID: backup_000001
+
+# 查看服务器上的文件
+ls -la /tmp/test_server_data/testuser/backup_000001/
+# 预期: header.bin  payload.bin  metadata.bin
+```
+
+### 测试 N4：远程还原
+
+```bash
+# 远程还原
+./build/backup remote-restore /tmp/test_restore_remote \
+    --server 127.0.0.1:18848 \
+    --username testuser --password testpass
+
+# 数据完整性验证
+diff -r tests/testdata /tmp/test_restore_remote
+# 预期: 无差异（特殊文件如 FIFO 会提示类型差异，属于 diff 工具的正常行为）
+
+# 验证普通文件内容
+cat /tmp/test_restore_remote/hello.txt
+# 预期: Hello World!
+
+# 验证符号链接
+readlink /tmp/test_restore_remote/subdir/link_to_hello
+# 预期: ../hello.txt
+
+# 验证管道
+test -p /tmp/test_restore_remote/myfifo && echo "FIFO OK"
+# 预期: FIFO OK
+
+# 验证文件权限
+stat -c '%a' /tmp/test_restore_remote/data.txt
+# 预期: 600
+```
+
+### 测试 N5：列出备份
+
+```bash
+./build/backup remote-list \
+    --server 127.0.0.1:18848 \
+    --username testuser --password testpass
+# 预期: 显示备份列表（含 backup ID 和时间戳）
+```
+
+### 测试 N6：远程备份 + 压缩 + 文件加密
+
+```bash
+# 全功能远程备份
+./build/backup remote-backup tests/testdata \
+    --server 127.0.0.1:18848 \
+    --username testuser --password testpass \
+    --pack index --compress huffman \
+    --encrypt xor --file-password filepass
+
+# 检查服务器端存储的是加密数据
+xxd /tmp/test_server_data/testuser/backup_000002/payload.bin | head -3
+# 预期: 不可读的二进制数据
+
+# 正确密码还原
+./build/backup remote-restore /tmp/test_restore_enc \
+    --server 127.0.0.1:18848 \
+    --username testuser --password testpass \
+    --file-password filepass
+    
+diff -r tests/testdata /tmp/test_restore_enc
+# 预期: 无差异
+
+# 错误文件密码还原（数据应损坏）
+./build/backup remote-restore /tmp/test_restore_bad \
+    --server 127.0.0.1:18848 \
+    --username testuser --password testpass \
+    --file-password wrongpass
+cat /tmp/test_restore_bad/hello.txt
+# 预期: 乱码（XOR 加密 + 错误密码 = 无法正确解密）
+```
+
+### 测试 N7：错误处理
+
+```bash
+# 连接不存在用户（用户未注册就直接备份）
+./build/backup remote-backup tests/testdata \
+    --server 127.0.0.1:18848 \
+    --username nonexist --password testpass \
+    --pack tar
+# 预期: Login failed, trying to register... (注册成功则继续备份)
+
+# 连接不存在的服务器
+./build/backup remote-list \
+    --server 127.0.0.1:19999 \
+    --username testuser --password testpass
+# 预期: Connection refused.
+
+# 未备份过的用户尝试还原
+./build/backup user register \
+    --server 127.0.0.1:18848 \
+    --username newuser --password newpass
+./build/backup remote-restore /tmp/test_restore_empty \
+    --server 127.0.0.1:18848 \
+    --username newuser --password newpass
+# 预期: No backup found.
+```
+
+### 测试 N8：跨机器通信
+
+```bash
+# === 场景：两台 Linux 电脑在同一局域网 ===
+#
+# 前提：两台电脑连接同一个 WiFi，且路由器未开启 AP 隔离
+#
+# 服务器端 (IP 假设为 192.168.1.100):
+./build/backup server start --port 8848 --storage ./server_data
+# 输出: Listening on 0.0.0.0:8848
+#
+# 客户端 (另一台电脑上执行，先确保能 ping 通服务器):
+ping 192.168.1.100
+#
+./build/backup user register \
+    --server 192.168.1.100:8848 \
+    --username remoteuser --password remotepass
+#
+./build/backup remote-backup /home/user/documents \
+    --server 192.168.1.100:8848 \
+    --username remoteuser --password remotepass \
+    --pack tar
+#
+./build/backup remote-restore /home/user/restored \
+    --server 192.168.1.100:8848 \
+    --username remoteuser --password remotepass
+#
+diff -r /home/user/documents /home/user/restored
+# 预期: 无差异
+```
+
+> **故障排除**：
+> - `Connection refused` → 检查服务器防火墙：`sudo ufw allow 8848/tcp`
+> - `No route to host` → 检查两台电脑是否在同一网段
+> - `Connection timed out` → 检查路由器是否开启了 AP 隔离（客户端隔离）功能
+
+---
+
+## 清理
+
+```bash
+# 停止服务器
+kill $(pgrep -f "backup server") 2>/dev/null
+
+# 清理单机模式测试文件
 rm -rf tests/output_*.bak tests/restored_*
+
+# 清理网络模式测试文件
+rm -rf /tmp/test_server_data /tmp/test_server_data2
+rm -rf /tmp/test_restore_remote /tmp/test_restore_enc /tmp/test_restore_bad /tmp/test_restore_empty
 ```
