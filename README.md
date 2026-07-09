@@ -15,8 +15,9 @@
 - [x] **自动识别**：还原时从备份文件头部自动读取启用的算法，无需用户指定
 - [x] **元数据保留**：文件权限、UID/GID、时间戳（atime/mtime/ctime）
 - [x] **特殊文件支持**：符号链接、管道 (FIFO)、块设备、字符设备
-- [x] **错误密码检测**：加密备份用错误密码还原时数据损坏（XOR/Vigenere 均为对称加密）
+- [x] **错误密码检测**：加密备份用错误密码还原时提示错误，不会崩溃
 - [x] **CMake 构建**：使用 CMake 3.16+ 管理项目
+- [x] **GUI 图形界面**：基于 Qt6 的图形化备份/还原/远程管理界面
 - [x] **网络备份（网盘模式）**：客户端-服务器架构，支持远程备份/还原
 - [x] **用户管理**：注册、登录、salt+hash 密码认证
 - [x] **元数据管理**：服务器端记录每次备份的文件列表，支持备份历史查看
@@ -30,7 +31,7 @@
 | 操作系统 | Linux（使用 POSIX API：`symlink`、`mkfifo`、`mknod`、`chmod`、`chown` 等） |
 | 编译器 | GCC 8+ 或 Clang 7+（需支持 C++17） |
 | 构建工具 | CMake 3.16+ |
-| 依赖库 | 无（仅 C++ 标准库 + POSIX 系统调用） |
+| 依赖库 | CLI: 无（仅 C++ 标准库 + POSIX 系统调用）<br>GUI: Qt6 Widgets（可选，不影响 CLI 构建） |
 | 权限 | 还原块设备/字符设备、恢复 UID/GID 需要 root 权限（普通文件无需） |
 
 ## 编译
@@ -42,7 +43,7 @@ cmake ..
 make -j$(nproc)
 ```
 
-编译成功后，可执行文件为 `build/backup`。
+编译成功后，可执行文件为 `build/backup`。如果系统安装了 Qt6，还会额外生成 `build/backup-gui`。
 
 > **备选（直接 g++）**：
 > ```bash
@@ -168,6 +169,38 @@ build/backup user login    --server <host:port> --username <用户名> --passwor
 ```
 
 > **跨机器使用**：服务器绑定 `0.0.0.0`，同一 WiFi/局域网下的其他电脑将 `--server` 中的 IP 替换为服务器的局域网 IP（用 `ip addr` 查看）即可连接。如果连接被拒绝，检查防火墙（`sudo ufw allow 8848`）和路由器 AP 隔离设置。
+
+## GUI 图形界面
+
+如果系统安装了 Qt6（`sudo apt install qt6-base-dev`），CMake 会自动检测并构建 GUI 目标。
+
+### 启动 GUI
+
+```bash
+# 从 build 目录启动
+cd build
+./backup-gui
+```
+
+### GUI 功能概览
+
+界面包含 5 个选项卡：
+
+| 选项卡 | 功能 |
+|--------|------|
+| 📦 本地备份 | 选择源目录 → 设置保存目录和文件名 → 选打包/压缩/加密 → 生成 `.bak` |
+| 📂 本地还原 | 选择 `.bak` 文件 → 选目标目录 → 输入密码 → 还原 |
+| ☁ 远程备份 | 连接服务器 → 选择源目录 → 备份到远程网盘 |
+| 📥 远程还原 | 连接服务器 → 选目标目录 → 从远程网盘还原 |
+| 📋 远程列表 | 连接服务器 → 查看服务器上的备份历史 |
+
+### GUI 特有安全机制
+
+- **输出文件冲突检测**：备份时若 `.bak` 文件已存在，弹窗阻止并提示更换文件名
+- **还原冲突检测**：还原前自动读取备份文件元数据，检查目标目录中是否有同名文件，有冲突时弹窗列出并阻止
+- **错误密码保护**：加密备份输错密码不会崩溃，提示「可能原因：密码错误、文件损坏或格式不匹配」
+- **顶级目录保留**：备份 `/path/to/folder` 后，还原时会自动创建 `folder/` 目录，而非散落文件
+- **文件名自动补全**：输入文件名时若未写 `.bak` 后缀，自动补上
 
 ## 网络架构
 
@@ -322,6 +355,22 @@ backup/
 │                   TransportEncryptor.h  ServerSession.h  BackupServer.h
 │                   NetworkBackupClient.h  NetworkRestoreClient.h
 ├── src/           (与 include/ 一一对应的 .cpp 实现)
+├── gui/                     # Qt6 图形界面
+│   ├── main.cpp              # GUI 入口
+│   ├── MainWindow.h/.cpp     # 主窗口（选项卡容器）
+│   ├── StrategySetup.h/.cpp  # 策略注册工厂
+│   ├── tabs/                 # 各功能选项卡
+│   │   ├── LocalBackupTab    # 本地备份
+│   │   ├── LocalRestoreTab   # 本地还原
+│   │   ├── RemoteBackupTab   # 远程备份
+│   │   ├── RemoteRestoreTab  # 远程还原
+│   │   └── RemoteListTab     # 远程列表
+│   └── workers/              # 后台工作线程（避免阻塞 UI）
+│       ├── BackupWorker      # 本地备份
+│       ├── RestoreWorker     # 本地还原
+│       ├── RemoteBackupWorker
+│       ├── RemoteRestoreWorker
+│       └── RemoteListWorker
 └── tests/
     ├── README.md              # 手动测试步骤（含网络功能测试）
     └── testdata/              # 静态测试数据（19 个条目，含特殊文件）

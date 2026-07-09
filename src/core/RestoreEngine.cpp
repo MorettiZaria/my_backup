@@ -4,6 +4,7 @@
 #include <iostream>
 #include <fstream>
 #include <algorithm>
+#include <stdexcept>
 #include <sys/stat.h>
 #include <fcntl.h>
 #include <unistd.h>
@@ -259,16 +260,19 @@ bool RestoreEngine::restoreFromRaw(const std::vector<uint8_t>& data,
     size_t offset = 0;
 
     auto r32 = [&]() -> uint32_t {
+        if (offset + 4 > data.size()) throw std::runtime_error("restoreFromRaw: unexpected end of data at offset");
         uint32_t v = 0;
         for (int i = 0; i < 4; ++i) v |= static_cast<uint32_t>(data[offset+i]) << (i*8);
         offset += 4; return v;
     };
     auto r16 = [&]() -> uint16_t {
+        if (offset + 2 > data.size()) throw std::runtime_error("restoreFromRaw: unexpected end of data at offset");
         uint16_t v = static_cast<uint16_t>(data[offset]) |
                      (static_cast<uint16_t>(data[offset+1]) << 8);
         offset += 2; return v;
     };
     auto r64 = [&]() -> uint64_t {
+        if (offset + 8 > data.size()) throw std::runtime_error("restoreFromRaw: unexpected end of data at offset");
         uint64_t v = 0;
         for (int i = 0; i < 8; ++i) v |= static_cast<uint64_t>(data[offset+i]) << (i*8);
         offset += 8; return v;
@@ -277,11 +281,20 @@ bool RestoreEngine::restoreFromRaw(const std::vector<uint8_t>& data,
     if (data.size() < 4) return false;
 
     uint32_t fileCount = r32();
+    // 合理性检查：文件数不应超过 100 万
+    if (fileCount > 1000000) {
+        std::cerr << "Error: invalid file count in restoreFromRaw (" << fileCount << "), data may be corrupted." << std::endl;
+        return false;
+    }
     for (uint32_t i = 0; i < fileCount; ++i) {
+        if (offset + 2 > data.size()) return false;
         uint16_t pathLen = r16();
+        if (offset + pathLen > data.size()) return false;
         std::string path(reinterpret_cast<const char*>(&data[offset]), pathLen);
         offset += pathLen;
+        if (offset + 8 > data.size()) return false;
         uint64_t contentLen = r64();
+        if (offset + contentLen > data.size()) return false;
 
         FileInfo info;
         info.relativePath = path;

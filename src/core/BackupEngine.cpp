@@ -68,6 +68,22 @@ bool BackupEngine::run(const std::string& sourceDir,
     std::vector<FileInfo> files = scanner.scan(sourceDir);
     std::cout << "  Found " << files.size() << " entries." << std::endl;
 
+    // 1b. 给所有相对路径加上源目录的 basename 前缀
+    //     这样还原时会在目标目录下创建同名顶级文件夹
+    std::string srcBase;
+    size_t lastSlash = sourceDir.rfind('/');
+    if (lastSlash != std::string::npos) {
+        srcBase = sourceDir.substr(lastSlash + 1);
+    } else {
+        srcBase = sourceDir;  // 没有斜杠，直接就是目录名
+    }
+    if (!srcBase.empty() && srcBase != ".") {
+        for (auto& f : files) {
+            f.relativePath = srcBase + "/" + f.relativePath;
+        }
+        std::cout << "  Prefixed paths with: " << srcBase << "/" << std::endl;
+    }
+
     // 2. 序列化元数据
     MetadataSerializer serializer;
     std::vector<uint8_t> metaBytes = serializer.serialize(files);
