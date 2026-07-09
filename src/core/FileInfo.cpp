@@ -12,9 +12,15 @@ void FileInfo::fromStat(const struct stat& st, const std::string& relPath) {
     owner        = st.st_uid;
     group        = st.st_gid;
     fileSize     = (fileType == S_IFREG) ? st.st_size : 0;
+#ifdef __APPLE__
+    atime        = st.st_atimespec.tv_sec;
+    mtime        = st.st_mtimespec.tv_sec;
+    ctime        = st.st_ctimespec.tv_sec;
+#else
     atime        = st.st_atim.tv_sec;
     mtime        = st.st_mtim.tv_sec;
     ctime        = st.st_ctim.tv_sec;
+#endif
     deviceId     = 0;
     symlinkTarget.clear();
 }
