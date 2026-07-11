@@ -1,0 +1,15 @@
+# Backup Server Configuration
+# Lines starting with # or ; are comments.
+
+[server]
+# Listening port (clients connect to this port)
+port = 8848
+
+# Storage directory for backups and user database
+storage_path = /var/lib/backup-server/data
+
+# Log file path (comment out or leave empty for stdout only)
+log_file = /var/log/backup-server.log
+
+# Maximum concurrent connections
+max_connections = 100

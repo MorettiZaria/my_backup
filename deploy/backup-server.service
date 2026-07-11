@@ -1,0 +1,27 @@
+[Unit]
+Description=Backup Server - Network backup storage service
+Documentation=https://github.com/MorettiZaria/my_backup
+After=network.target
+
+[Service]
+Type=simple
+ExecStart=/usr/local/bin/backup server start --config /etc/backup-server.conf
+Restart=on-failure
+RestartSec=10
+
+# 安全加固
+User=backup
+Group=backup
+NoNewPrivileges=yes
+ProtectSystem=strict
+ProtectHome=yes
+ReadWritePaths=/var/lib/backup-server /var/log
+PrivateTmp=yes
+
+# 日志
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=backup-server
+
+[Install]
+WantedBy=multi-user.target

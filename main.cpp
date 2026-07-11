@@ -15,6 +15,8 @@
 #include "network/NetworkBackupClient.h"
 #include "network/NetworkRestoreClient.h"
 #include "network/UserManager.h"
+#include "network/Logger.h"
+#include "network/ServerConfig.h"
 
 #include <iostream>
 #include <string>
@@ -86,25 +88,50 @@ int main(int argc, char* argv[]) {
     // ===========================================================
     if (command == "server") {
         if (argc < 3 || std::string(argv[2]) != "start") {
-            std::cerr << "Usage: backup server start --port <port> --storage <path>" << std::endl;
+            std::cerr << "Usage: backup server start [--config <path>] [--port <port>] [--storage <path>] [--log-file <path>]" << std::endl;
             return 1;
         }
 
-        uint16_t port = 8848;
-        std::string storagePath = "./server_data";
+        ServerConfig config;
+        std::string configPath;
 
+        // 先解析 CLI 参数：--config 优先加载
         int i = 3;
         while (i < argc) {
             std::string opt = argv[i];
-            if (opt == "--port" && i + 1 < argc) {
-                port = static_cast<uint16_t>(std::stoi(argv[++i]));
-            } else if (opt == "--storage" && i + 1 < argc) {
-                storagePath = argv[++i];
+            if (opt == "--config" && i + 1 < argc) {
+                configPath = argv[++i];
             }
             ++i;
         }
 
-        BackupServer server(port, storagePath);
+        // 加载配置文件
+        if (!configPath.empty()) {
+            config.load(configPath);
+        }
+
+        // 再解析其余 CLI 参数（CLI 参数覆盖配置文件）
+        i = 3;
+        while (i < argc) {
+            std::string opt = argv[i];
+            if (opt == "--port" && i + 1 < argc) {
+                config.setPort(static_cast<uint16_t>(std::stoi(argv[++i])));
+            } else if (opt == "--storage" && i + 1 < argc) {
+                config.setStoragePath(argv[++i]);
+            } else if (opt == "--log-file" && i + 1 < argc) {
+                config.setLogFile(argv[++i]);
+            } else if (opt == "--config" && i + 1 < argc) {
+                ++i;  // 跳过值（已处理）
+            }
+            ++i;
+        }
+
+        // 初始化 Logger（如果配置文件指定了 log_file）
+        if (!config.logFile().empty()) {
+            Logger::instance().init(config.logFile(), false);
+        }
+
+        BackupServer server(config);
         return server.start() ? 0 : 1;
     }
 

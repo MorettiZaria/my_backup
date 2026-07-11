@@ -1,5 +1,5 @@
 #include "network/ServerSession.h"
-#include <iostream>
+#include "network/Logger.h"
 #include <random>
 #include <cstring>
 #include <algorithm>
@@ -44,7 +44,8 @@ bool ServerSession::sendResponse(uint16_t type, uint8_t status) {
 // ===== run() 状态机 =====
 
 void ServerSession::run() {
-    std::cout << "[Session] New connection." << std::endl;
+    auto& log = Logger::instance();
+    log.info("[Session] New connection.");
 
     // 设置 300 秒超时
     socket_.setReceiveTimeout(300);
@@ -76,7 +77,7 @@ void ServerSession::run() {
     while (true) {
         NetworkMessage msg = receiveEncrypted();
         if (msg.type == 0) {
-            std::cout << "[Session] Client disconnected." << std::endl;
+            log.info("[Session] Client disconnected.");
             return;
         }
 
@@ -104,6 +105,8 @@ void ServerSession::run() {
 // ===== 握手 =====
 
 bool ServerSession::handleHandshake() {
+    auto& log = Logger::instance();
+
     // 等待 CLIENT_HELLO
     NetworkMessage hello = socket_.receiveMessage();  // 握手阶段不加密
     if (hello.type != static_cast<uint16_t>(MessageType::CLIENT_HELLO)) {
@@ -137,13 +140,15 @@ bool ServerSession::handleHandshake() {
         return false;
     }
 
-    std::cout << "[Session] Handshake complete." << std::endl;
+    log.info("[Session] Handshake complete.");
     return true;
 }
 
 // ===== 登录 =====
 
 bool ServerSession::handleLogin(NetworkMessage& msg) {
+    auto& log = Logger::instance();
+
     // 第一步：LOGIN_REQUEST 仅含用户名
     if (msg.payload.size() < 2) {
         sendError(ErrorCode::INVALID_MESSAGE, "Invalid LOGIN_REQUEST.");
@@ -156,7 +161,7 @@ bool ServerSession::handleLogin(NetworkMessage& msg) {
     // 查找用户
     std::vector<uint8_t> storedSalt, storedHash;
     if (!userMgr_.getUserHash(name, storedSalt, storedHash)) {
-        std::cout << "[Session] Login failed: user '" << name << "' not found." << std::endl;
+        log.info("[Session] Login failed: user '" + name + "' not found.");
         sendResponse(static_cast<uint16_t>(MessageType::LOGIN_RESPONSE), 1);
         return true;
     }
@@ -176,13 +181,13 @@ bool ServerSession::handleLogin(NetworkMessage& msg) {
 
     // 第四步：直接比对哈希（salt + hash(password, salt)）
     if (clientHash == storedHash) {
-        std::cout << "[Session] User '" << name << "' logged in." << std::endl;
+        log.info("[Session] User '" + name + "' logged in.");
         encryptor_.initSession(name, serverChallenge_);
         currentUser_ = name;
         authenticated_ = true;
         sendResponse(static_cast<uint16_t>(MessageType::LOGIN_RESPONSE), 0);
     } else {
-        std::cout << "[Session] Login failed: wrong password for '" << name << "'." << std::endl;
+        log.info("[Session] Login failed: wrong password for '" + name + "'.");
         sendResponse(static_cast<uint16_t>(MessageType::LOGIN_RESPONSE), 1);
     }
 
@@ -192,6 +197,8 @@ bool ServerSession::handleLogin(NetworkMessage& msg) {
 // ===== 注册 =====
 
 bool ServerSession::handleRegister(NetworkMessage& msg) {
+    auto& log = Logger::instance();
+
     if (msg.payload.size() < 2) {
         sendError(ErrorCode::INVALID_MESSAGE, "Invalid REGISTER_REQUEST.");
         return true;
@@ -213,12 +220,12 @@ bool ServerSession::handleRegister(NetworkMessage& msg) {
 
     // 客户端已预先计算 hash，服务器直接存储
     if (!userMgr_.registerUserRaw(name, salt, pwHash)) {
-        std::cout << "[Session] Register failed: user '" << name << "' already exists." << std::endl;
+        log.info("[Session] Register failed: user '" + name + "' already exists.");
         sendResponse(static_cast<uint16_t>(MessageType::REGISTER_RESPONSE), 1);
         return true;
     }
 
-    std::cout << "[Session] User '" << name << "' registered." << std::endl;
+    log.info("[Session] User '" + name + "' registered.");
 
     // 注册后自动初始化传输加密并登录
     encryptor_.initSession(name, serverChallenge_);
@@ -232,7 +239,8 @@ bool ServerSession::handleRegister(NetworkMessage& msg) {
 // ===== 备份 =====
 
 bool ServerSession::handleBackup(NetworkMessage& firstMsg) {
-    std::cout << "[Session] Receiving backup..." << std::endl;
+    auto& log = Logger::instance();
+    log.info("[Session] Receiving backup...");
 
     std::string backupId = storage_.createBackup(currentUser_);
     std::vector<uint8_t> wholeBak;
@@ -304,8 +312,8 @@ bool ServerSession::handleBackup(NetworkMessage& firstMsg) {
         storage_.saveMetadata(currentUser_, backupId, files);
     }
 
-    std::cout << "[Session] Backup " << backupId << " saved for user " << currentUser_
-              << " (" << wholeBak.size() << " bytes)." << std::endl;
+    log.info("[Session] Backup " + backupId + " saved for user " + currentUser_
+              + " (" + std::to_string(wholeBak.size()) + " bytes).");
 
     // 发送确认
     std::vector<uint8_t> ack;
@@ -318,6 +326,8 @@ bool ServerSession::handleBackup(NetworkMessage& firstMsg) {
 // ===== 还原 =====
 
 bool ServerSession::handleRestore(NetworkMessage& msg) {
+    auto& log = Logger::instance();
+
     // 解析 backupId
     size_t off = 0;
     std::string backupId;
@@ -333,8 +343,8 @@ bool ServerSession::handleRestore(NetworkMessage& msg) {
         return true;
     }
 
-    std::cout << "[Session] Restoring backup " << backupId
-              << " for user " << currentUser_ << std::endl;
+    log.info("[Session] Restoring backup " + backupId
+              + " for user " + currentUser_);
 
     // 加载备份数据
     auto headerBytes = storage_.loadHeader(currentUser_, backupId);
@@ -378,7 +388,7 @@ bool ServerSession::handleRestore(NetworkMessage& msg) {
     writeUint32BE(completePayload, static_cast<uint32_t>(metadata.size()));
     sendEncrypted(NetworkMessage::make(MessageType::RESTORE_COMPLETE, std::move(completePayload)));
 
-    std::cout << "[Session] Restore data sent." << std::endl;
+    log.info("[Session] Restore data sent.");
     return true;
 }
 
@@ -401,5 +411,6 @@ bool ServerSession::handleListBackups() {
 }
 
 void ServerSession::handleLogout() {
-    std::cout << "[Session] User '" << currentUser_ << "' logged out." << std::endl;
+    auto& log = Logger::instance();
+    log.info("[Session] User '" + currentUser_ + "' logged out.");
 }
