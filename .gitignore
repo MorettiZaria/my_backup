@@ -48,3 +48,6 @@ __pycache__/
 
 # 文档（不上传）
 doc/
+
+# Claude Code 项目指南（不上传）
+CLAUDE.md
