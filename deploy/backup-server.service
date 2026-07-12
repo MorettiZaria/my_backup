@@ -5,7 +5,7 @@ After=network.target
 
 [Service]
 Type=simple
-ExecStart=/usr/local/bin/backup server start --config /etc/backup-server.conf
+ExecStart=/usr/local/bin/backup-server --config /etc/backup-server.conf
 Restart=on-failure
 RestartSec=10
 

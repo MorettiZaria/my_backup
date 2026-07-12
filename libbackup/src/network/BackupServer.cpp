@@ -154,7 +154,7 @@ bool BackupServer::start() {
         serverFd_ = -1;
     }
 
-    // 等待活跃子进程结束（最多等 30 秒）
+    // 等待活跃子进程结束（最多等 10 秒）
     if (!childPids_.empty()) {
         // 先收割所有已退出子进程（清除僵尸进程）
         while (waitpid(-1, nullptr, WNOHANG) > 0);
@@ -179,9 +179,9 @@ bool BackupServer::start() {
                 }
             }
 
-            // 等待最多 30 秒
+            // 等待最多 10 秒
             int waited = 0;
-            while (countRunning() > 0 && waited < 30) {
+            while (countRunning() > 0 && waited < 10) {
                 sleep(1);
                 waited++;
             }

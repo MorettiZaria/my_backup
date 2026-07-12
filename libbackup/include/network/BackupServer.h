@@ -15,7 +15,7 @@ public:
     explicit BackupServer(const ServerConfig& config);
 
     /// 启动服务器（阻塞，直到收到 SIGTERM/SIGINT 或调用 stop()）
-    bool start();
+    [[nodiscard]] bool start();
 
     /// 停止服务器（可从信号处理器中调用）
     void stop();

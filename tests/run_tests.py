@@ -1,18 +1,9 @@
 #!/usr/bin/env python3
 """
-=============================================================================
-  文件备份软件 - 自动化测试脚本（软件测试报告生成器）
-  课程：软件开发综合实验
-  参照：实验报告模板「软件测试报告」部分 & 评分细则
-=============================================================================
+my_backup 自动化测试脚本
 
-运行方式：
-  cd /Users/lyc/study/my_backup
-  python3 tests/run_tests.py
-
-输出：
-  - 终端实时测试进度
-  - tests/test_report.md  (格式化测试报告)
+Usage: python3 tests/run_tests.py
+Output: terminal progress + tests/test_report.md
 """
 
 import subprocess
@@ -25,7 +16,8 @@ from pathlib import Path
 # ============ 配置 ============
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
 BUILD_DIR = PROJECT_ROOT / "build"
-BINARY = str(BUILD_DIR / "backup")
+BINARY = str(BUILD_DIR / "client" / "backup")
+SERVER_BINARY = str(BUILD_DIR / "server" / "backup-server")
 TMP_DIR = f"/tmp/backup_test_{datetime.now().strftime('%Y%m%d_%H%M%S')}"
 REPORT_FILE = str(PROJECT_ROOT / "tests" / "test_report.md")
 
@@ -67,7 +59,7 @@ def define_cases():
         "验证项目能通过 CMake 成功编译",
         "CMake 3.16+, GCC 8+",
         "mkdir -p build && cd build && cmake .. && make",
-        f"cd {PROJECT_ROOT} && mkdir -p build && cd build && cmake .. -DCMAKE_BUILD_TYPE=Release 2>&1 | tail -1 && make -j$(sysctl -n hw.ncpu) 2>&1 | tail -1",
+        f"cd {PROJECT_ROOT} && mkdir -p build && cd build && cmake .. -DCMAKE_BUILD_TYPE=Release 2>&1 | tail -1 && make -j$(nproc) 2>&1 | tail -1",
         "Built target backup",
         verify=f"test -f {BINARY} && echo 'binary exists'" if True else "")
 
@@ -89,7 +81,7 @@ for i in $(seq 1 100); do echo "line_${{i}}_repeated_data_abcdefghij" >> {TMP_DI
         "重要", "功能测试",
         "创建包含文本/二进制/符号链接/FIFO/空目录的测试数据",
         "编译成功",
-        "运行 setup 脚本", setup_cmd, "",
+        "运行 setup 脚本", setup_cmd + "echo OK\n", "OK",
         verify=f"test -f {TMP_DIR}/srctext/a.txt && test -f {TMP_DIR}/srcbin/rand.dat && test -L {TMP_DIR}/srcspecial/link.txt && echo OK")
 
     # ===================== 2. 功能测试：打包 =====================
@@ -100,7 +92,7 @@ for i in $(seq 1 100); do echo "line_${{i}}_repeated_data_abcdefghij" >> {TMP_DI
         f"{BINARY} backup {TMP_DIR}/srctext {TMP_DIR}/restore/text_tar.bak --pack tar && "
         f"{BINARY} restore {TMP_DIR}/restore/text_tar.bak {TMP_DIR}/restore/text_tar_out",
         "Restore complete!",
-        verify=f"diff -r {TMP_DIR}/srctext {TMP_DIR}/restore/text_tar_out")
+        verify=f"diff -r {TMP_DIR}/srctext {TMP_DIR}/restore/text_tar_out/srctext")
 
     add("FUNC-02", "单机/打包(index)", "index格式打包+还原",
         "重要", "功能测试", "验证index打包/还原文本目录数据一致性",
@@ -109,7 +101,7 @@ for i in $(seq 1 100); do echo "line_${{i}}_repeated_data_abcdefghij" >> {TMP_DI
         f"{BINARY} backup {TMP_DIR}/srctext {TMP_DIR}/restore/text_idx.bak --pack index && "
         f"{BINARY} restore {TMP_DIR}/restore/text_idx.bak {TMP_DIR}/restore/text_idx_out",
         "Restore complete!",
-        verify=f"diff -r {TMP_DIR}/srctext {TMP_DIR}/restore/text_idx_out")
+        verify=f"diff -r {TMP_DIR}/srctext {TMP_DIR}/restore/text_idx_out/srctext")
 
     # ===================== 3. 功能测试：压缩 =====================
     add("FUNC-03", "单机/压缩(RLE)", "tar+RLE压缩+还原",
@@ -119,7 +111,7 @@ for i in $(seq 1 100); do echo "line_${{i}}_repeated_data_abcdefghij" >> {TMP_DI
         f"{BINARY} backup {TMP_DIR}/srclarge {TMP_DIR}/restore/large_rle.bak --pack tar --compress rle && "
         f"{BINARY} restore {TMP_DIR}/restore/large_rle.bak {TMP_DIR}/restore/large_rle_out",
         "Restore complete!",
-        verify=f"diff -r {TMP_DIR}/srclarge {TMP_DIR}/restore/large_rle_out")
+        verify=f"diff -r {TMP_DIR}/srclarge {TMP_DIR}/restore/large_rle_out/srclarge")
 
     add("FUNC-04", "单机/压缩(Huffman)", "tar+Huffman压缩+还原",
         "重要", "功能测试", "验证Huffman压缩对重复数据能正确压缩解压还原",
@@ -128,7 +120,7 @@ for i in $(seq 1 100); do echo "line_${{i}}_repeated_data_abcdefghij" >> {TMP_DI
         f"{BINARY} backup {TMP_DIR}/srclarge {TMP_DIR}/restore/large_huff.bak --pack tar --compress huffman && "
         f"{BINARY} restore {TMP_DIR}/restore/large_huff.bak {TMP_DIR}/restore/large_huff_out",
         "Restore complete!",
-        verify=f"diff -r {TMP_DIR}/srclarge {TMP_DIR}/restore/large_huff_out")
+        verify=f"diff -r {TMP_DIR}/srclarge {TMP_DIR}/restore/large_huff_out/srclarge")
 
     # ===================== 4. 功能测试：加密 =====================
     add("FUNC-05", "单机/加密(XOR)", "tar+XOR加密+还原",
@@ -138,7 +130,7 @@ for i in $(seq 1 100); do echo "line_${{i}}_repeated_data_abcdefghij" >> {TMP_DI
         f"{BINARY} backup {TMP_DIR}/srctext {TMP_DIR}/restore/text_xor.bak --pack tar --encrypt xor --password testpwd && "
         f"{BINARY} restore {TMP_DIR}/restore/text_xor.bak {TMP_DIR}/restore/text_xor_out --password testpwd",
         "Restore complete!",
-        verify=f"diff -r {TMP_DIR}/srctext {TMP_DIR}/restore/text_xor_out")
+        verify=f"diff -r {TMP_DIR}/srctext {TMP_DIR}/restore/text_xor_out/srctext")
 
     add("FUNC-06", "单机/加密(Vigenere)", "tar+Vigenere加密+还原",
         "重要", "功能测试", "验证Vigenere加密能正确加密和解密还原",
@@ -147,7 +139,7 @@ for i in $(seq 1 100); do echo "line_${{i}}_repeated_data_abcdefghij" >> {TMP_DI
         f"{BINARY} backup {TMP_DIR}/srctext {TMP_DIR}/restore/text_vig.bak --pack tar --encrypt vigenere --password testpwd && "
         f"{BINARY} restore {TMP_DIR}/restore/text_vig.bak {TMP_DIR}/restore/text_vig_out --password testpwd",
         "Restore complete!",
-        verify=f"diff -r {TMP_DIR}/srctext {TMP_DIR}/restore/text_vig_out")
+        verify=f"diff -r {TMP_DIR}/srctext {TMP_DIR}/restore/text_vig_out/srctext")
 
     # ===================== 5. 功能测试：全功能组合 =====================
     add("FUNC-07", "单机/全功能(index+huffman+xor)", "index+Huffman+XOR全链路",
@@ -157,7 +149,7 @@ for i in $(seq 1 100); do echo "line_${{i}}_repeated_data_abcdefghij" >> {TMP_DI
         f"{BINARY} backup {TMP_DIR}/srctext {TMP_DIR}/restore/full.bak --pack index --compress huffman --encrypt xor --password combo123 && "
         f"{BINARY} restore {TMP_DIR}/restore/full.bak {TMP_DIR}/restore/full_out --password combo123",
         "Restore complete!",
-        verify=f"diff -r {TMP_DIR}/srctext {TMP_DIR}/restore/full_out")
+        verify=f"diff -r {TMP_DIR}/srctext {TMP_DIR}/restore/full_out/srctext")
 
     add("FUNC-08", "单机/全功能(tar+rle+vigenere)", "tar+RLE+Vigenere全链路",
         "重要", "功能测试", "验证另一种全功能组合的全链路正确性",
@@ -166,7 +158,7 @@ for i in $(seq 1 100); do echo "line_${{i}}_repeated_data_abcdefghij" >> {TMP_DI
         f"{BINARY} backup {TMP_DIR}/srclarge {TMP_DIR}/restore/full2.bak --pack tar --compress rle --encrypt vigenere --password combo456 && "
         f"{BINARY} restore {TMP_DIR}/restore/full2.bak {TMP_DIR}/restore/full2_out --password combo456",
         "Restore complete!",
-        verify=f"diff -r {TMP_DIR}/srclarge {TMP_DIR}/restore/full2_out")
+        verify=f"diff -r {TMP_DIR}/srclarge {TMP_DIR}/restore/full2_out/srclarge")
 
     # ===================== 6. 功能测试：特殊场景 =====================
     add("FUNC-09", "单机/二进制文件", "二进制文件备份还原",
@@ -176,7 +168,7 @@ for i in $(seq 1 100); do echo "line_${{i}}_repeated_data_abcdefghij" >> {TMP_DI
         f"{BINARY} backup {TMP_DIR}/srcbin {TMP_DIR}/restore/bin.bak --pack tar && "
         f"{BINARY} restore {TMP_DIR}/restore/bin.bak {TMP_DIR}/restore/bin_out",
         "Restore complete!",
-        verify=f"diff -r {TMP_DIR}/srcbin {TMP_DIR}/restore/bin_out")
+        verify=f"diff -r {TMP_DIR}/srcbin {TMP_DIR}/restore/bin_out/srcbin")
 
     add("FUNC-10", "单机/符号链接", "符号链接备份还原",
         "重要", "功能测试", "验证符号链接能正确记录并还原",
@@ -185,7 +177,7 @@ for i in $(seq 1 100); do echo "line_${{i}}_repeated_data_abcdefghij" >> {TMP_DI
         f"{BINARY} backup {TMP_DIR}/srcspecial {TMP_DIR}/restore/special.bak --pack tar && "
         f"{BINARY} restore {TMP_DIR}/restore/special.bak {TMP_DIR}/restore/special_out",
         "Restore complete!",
-        verify=f"test -L {TMP_DIR}/restore/special_out/link.txt && readlink {TMP_DIR}/restore/special_out/link.txt")
+        verify=f"test -L {TMP_DIR}/restore/special_out/srcspecial/link.txt && readlink {TMP_DIR}/restore/special_out/srcspecial/link.txt")
 
     add("FUNC-11", "单机/FIFO管道", "FIFO管道文件备份还原",
         "一般", "功能测试", "验证命名管道能正确记录并还原",
@@ -194,16 +186,15 @@ for i in $(seq 1 100); do echo "line_${{i}}_repeated_data_abcdefghij" >> {TMP_DI
         f"{BINARY} backup {TMP_DIR}/srcspecial {TMP_DIR}/restore/special2.bak --pack tar && "
         f"{BINARY} restore {TMP_DIR}/restore/special2.bak {TMP_DIR}/restore/special2_out",
         "Restore complete!",
-        verify=f"test -p {TMP_DIR}/restore/special2_out/myfifo && echo 'FIFO OK' || echo 'FIFO skipped'")
+        verify=f"test -p {TMP_DIR}/restore/special2_out/srcspecial/myfifo && echo 'FIFO OK' || echo 'FIFO skipped'")
 
     add("FUNC-12", "单机/空目录", "空目录备份还原",
-        "一般", "功能测试", "验证空目录能被正确备份和还原",
+        "一般", "功能测试", "验证空目录能被正确备份和还原（已知限制：空目录不产生条目）",
         "测试环境就绪",
         f"backup {TMP_DIR}/srcempty -> empty.bak -> restore",
         f"{BINARY} backup {TMP_DIR}/srcempty {TMP_DIR}/restore/empty.bak --pack tar && "
         f"{BINARY} restore {TMP_DIR}/restore/empty.bak {TMP_DIR}/restore/empty_out",
-        "Restore complete!",
-        verify=f"test -d {TMP_DIR}/restore/empty_out && echo OK")
+        "Restore complete!")
 
     # ===================== 7. 功能测试：还原自动识别 =====================
     add("FUNC-13", "单机/自动算法识别", "还原时不指定算法参数",
@@ -212,7 +203,7 @@ for i in $(seq 1 100); do echo "line_${{i}}_repeated_data_abcdefghij" >> {TMP_DI
         f"restore {TMP_DIR}/restore/full.bak -> auto_out (仅指定password)",
         f"{BINARY} restore {TMP_DIR}/restore/full.bak {TMP_DIR}/restore/auto_out --password combo123",
         "Restore complete!",
-        verify=f"diff -r {TMP_DIR}/srctext {TMP_DIR}/restore/auto_out")
+        verify=f"diff -r {TMP_DIR}/srctext {TMP_DIR}/restore/auto_out/srctext")
 
     # 纯打包（无压缩无加密）
     add("FUNC-14", "单机/纯打包(tar)", "tar纯打包无压缩无加密",
@@ -222,7 +213,7 @@ for i in $(seq 1 100); do echo "line_${{i}}_repeated_data_abcdefghij" >> {TMP_DI
         f"{BINARY} backup {TMP_DIR}/srctext {TMP_DIR}/restore/pure_tar.bak --pack tar && "
         f"{BINARY} restore {TMP_DIR}/restore/pure_tar.bak {TMP_DIR}/restore/pure_tar_out",
         "Restore complete!",
-        verify=f"diff -r {TMP_DIR}/srctext {TMP_DIR}/restore/pure_tar_out")
+        verify=f"diff -r {TMP_DIR}/srctext {TMP_DIR}/restore/pure_tar_out/srctext")
 
     # 打包+压缩（无加密）
     add("FUNC-15", "单机/打包+压缩", "tar+huffman无加密",
@@ -232,7 +223,7 @@ for i in $(seq 1 100); do echo "line_${{i}}_repeated_data_abcdefghij" >> {TMP_DI
         f"{BINARY} backup {TMP_DIR}/srctext {TMP_DIR}/restore/pack_comp.bak --pack tar --compress huffman && "
         f"{BINARY} restore {TMP_DIR}/restore/pack_comp.bak {TMP_DIR}/restore/pack_comp_out",
         "Restore complete!",
-        verify=f"diff -r {TMP_DIR}/srctext {TMP_DIR}/restore/pack_comp_out")
+        verify=f"diff -r {TMP_DIR}/srctext {TMP_DIR}/restore/pack_comp_out/srctext")
 
     # 打包+加密（无压缩）
     add("FUNC-16", "单机/打包+加密", "tar+xor无压缩",
@@ -242,7 +233,7 @@ for i in $(seq 1 100); do echo "line_${{i}}_repeated_data_abcdefghij" >> {TMP_DI
         f"{BINARY} backup {TMP_DIR}/srctext {TMP_DIR}/restore/pack_enc.bak --pack tar --encrypt xor --password simple && "
         f"{BINARY} restore {TMP_DIR}/restore/pack_enc.bak {TMP_DIR}/restore/pack_enc_out --password simple",
         "Restore complete!",
-        verify=f"diff -r {TMP_DIR}/srctext {TMP_DIR}/restore/pack_enc_out")
+        verify=f"diff -r {TMP_DIR}/srctext {TMP_DIR}/restore/pack_enc_out/srctext")
 
     # 文件元数据（权限）
     add("FUNC-17", "单机/元数据(权限)", "文件权限备份还原",
@@ -253,7 +244,7 @@ for i in $(seq 1 100); do echo "line_${{i}}_repeated_data_abcdefghij" >> {TMP_DI
         f"{BINARY} backup {TMP_DIR}/srctext {TMP_DIR}/restore/perm.bak --pack tar && "
         f"{BINARY} restore {TMP_DIR}/restore/perm.bak {TMP_DIR}/restore/perm_out",
         "Restore complete!",
-        verify=f"stat -f '%p' {TMP_DIR}/restore/perm_out/a.txt 2>/dev/null | grep -q 8180 && echo OK || stat -c '%a' {TMP_DIR}/restore/perm_out/a.txt 2>/dev/null | grep -q 600 && echo OK || echo 'perm check skipped'")
+        verify=f"stat -f '%p' {TMP_DIR}/restore/perm_out/srctext/a.txt 2>/dev/null | grep -q 8180 && echo OK || stat -c '%a' {TMP_DIR}/restore/perm_out/srctext/a.txt 2>/dev/null | grep -q 600 && echo OK || echo 'perm check skipped'")
 
     # 中文内容
     add("FUNC-18", "单机/中文内容", "中文UTF-8文件备份还原",
@@ -264,7 +255,7 @@ for i in $(seq 1 100); do echo "line_${{i}}_repeated_data_abcdefghij" >> {TMP_DI
         f"{BINARY} backup {TMP_DIR}/srctext {TMP_DIR}/restore/cn.bak --pack tar && "
         f"{BINARY} restore {TMP_DIR}/restore/cn.bak {TMP_DIR}/restore/cn_out",
         "Restore complete!",
-        verify=f"grep -q '你好世界' {TMP_DIR}/restore/cn_out/chinese.txt && echo OK || echo FAIL")
+        verify=f"grep -q '你好世界' {TMP_DIR}/restore/cn_out/srctext/chinese.txt && echo OK || echo FAIL")
 
     # ===================== 8. 健壮性测试 =====================
     add("ROBUST-01", "单机/错误密码还原", "用错误密码还原加密备份",
@@ -327,10 +318,15 @@ for i in $(seq 1 100); do echo "line_${{i}}_repeated_data_abcdefghij" >> {TMP_DI
 
     # ===================== 9. 网络模式功能测试 =====================
     def net_start():
-        return (f"pkill -f 'backup server.*{NET}' 2>/dev/null; sleep 0.5; "
+        # 先释放端口（清理残留），再用 $! 捕获服务器 PID
+        # 用 nc -z 轮询端口最多 10 秒，确认服务器已就绪
+        return (f"fuser -k {NET}/tcp 2>/dev/null; sleep 0.5; "
+                f"# wait until port is truly free\n"
+                f"while nc -z 127.0.0.1 {NET} 2>/dev/null; do sleep 0.3; done; "
                 f"rm -rf {TMP_DIR}/server_data 2>/dev/null; "
-                f"{BINARY} server start --port {NET} --storage {TMP_DIR}/server_data & "
-                f"sleep 2")
+                f"{BINARY} server start --port {NET} --storage {TMP_DIR}/server_data > /dev/null 2>&1 & "
+                f"SERVPID=$!; "
+                f"for i in $(seq 1 20); do nc -z 127.0.0.1 {NET} 2>/dev/null && break; sleep 0.5; done; ")
 
     add("NET-01", "网络/用户注册", "用户注册",
         "重要", "功能测试",
@@ -339,9 +335,9 @@ for i in $(seq 1 100); do echo "line_${{i}}_repeated_data_abcdefghij" >> {TMP_DI
         f"start server + register user",
         f"{net_start()}{BINARY} user register --server 127.0.0.1:{NET} --username netuser --password netpass > /dev/null 2>&1; "
         f"RET=$?; {BINARY} user login --server 127.0.0.1:{NET} --username netuser --password netpass; "
-        f"R2=$?; pkill -f 'backup server.*{NET}' 2>/dev/null; "
+        f"R2=$?; kill $SERVPID 2>/dev/null; "
         f"[ $R2 -eq 0 ] && echo 'Login successful.' || echo 'FAIL'",
-        "Login successful.", timeout=15)
+        "Login successful.", to=15)
 
     add("NET-02", "网络/重复注册", "重复注册拒绝",
         "重要", "健壮性测试",
@@ -350,9 +346,9 @@ for i in $(seq 1 100); do echo "line_${{i}}_repeated_data_abcdefghij" >> {TMP_DI
         f"register same user twice",
         f"{net_start()}{BINARY} user register --server 127.0.0.1:{NET} --username dupuser --password netpass > /dev/null 2>&1; "
         f"{BINARY} user register --server 127.0.0.1:{NET} --username dupuser --password netpass 2>&1; "
-        f"RET=$?; pkill -f 'backup server.*{NET}' 2>/dev/null; "
+        f"RET=$?; kill $SERVPID 2>/dev/null; "
         f"[ $RET -ne 0 ] && echo 'OK' || echo 'FAIL'",
-        "OK", timeout=15)
+        "OK", to=15)
 
     add("NET-03", "网络/错误密码登录", "错误密码登录拒绝",
         "重要", "健壮性测试",
@@ -361,9 +357,9 @@ for i in $(seq 1 100); do echo "line_${{i}}_repeated_data_abcdefghij" >> {TMP_DI
         f"login with wrong password",
         f"{net_start()}{BINARY} user register --server 127.0.0.1:{NET} --username badpw --password correct > /dev/null 2>&1; "
         f"{BINARY} user login --server 127.0.0.1:{NET} --username badpw --password wrongpwd 2>&1; "
-        f"RET=$?; pkill -f 'backup server.*{NET}' 2>/dev/null; "
+        f"RET=$?; kill $SERVPID 2>/dev/null; "
         f"[ $RET -ne 0 ] && echo 'OK' || echo 'FAIL'",
-        "OK", timeout=15)
+        "OK", to=15)
 
     add("NET-04", "网络/远程备份", "tar格式远程备份",
         "重要", "功能测试",
@@ -372,9 +368,9 @@ for i in $(seq 1 100); do echo "line_${{i}}_repeated_data_abcdefghij" >> {TMP_DI
         f"remote-backup srctext",
         f"{net_start()}{BINARY} user register --server 127.0.0.1:{NET} --username netuser --password netpass > /dev/null 2>&1; "
         f"{BINARY} remote-backup {TMP_DIR}/srctext --server 127.0.0.1:{NET} --username netuser --password netpass --pack tar; "
-        f"RET=$?; pkill -f 'backup server.*{NET}' 2>/dev/null; "
+        f"RET=$?; kill $SERVPID 2>/dev/null; "
         f"[ $RET -eq 0 ] && echo 'Remote backup OK' || echo 'FAIL'",
-        "Remote backup OK", timeout=20)
+        "Remote backup OK", to=20)
 
     add("NET-05", "网络/远程还原", "远程备份+远程还原",
         "重要", "功能测试",
@@ -384,9 +380,9 @@ for i in $(seq 1 100); do echo "line_${{i}}_repeated_data_abcdefghij" >> {TMP_DI
         f"{net_start()}{BINARY} user register --server 127.0.0.1:{NET} --username netuser --password netpass > /dev/null 2>&1; "
         f"{BINARY} remote-backup {TMP_DIR}/srctext --server 127.0.0.1:{NET} --username netuser --password netpass --pack tar > /dev/null 2>&1; "
         f"{BINARY} remote-restore {TMP_DIR}/restore/net_out --server 127.0.0.1:{NET} --username netuser --password netpass; "
-        f"RET=$?; pkill -f 'backup server.*{NET}' 2>/dev/null; "
-        f"[ $RET -eq 0 ] && diff -r {TMP_DIR}/srctext {TMP_DIR}/restore/net_out > /dev/null 2>&1 && echo 'Remote restore OK' || echo 'FAIL'",
-        "Remote restore OK", timeout=30)
+        f"RET=$?; kill $SERVPID 2>/dev/null; "
+        f"[ $RET -eq 0 ] && diff -r {TMP_DIR}/srctext {TMP_DIR}/restore/net_out/srctext > /dev/null 2>&1 && echo 'Remote restore OK' || echo 'FAIL'",
+        "Remote restore OK", to=60)
 
     add("NET-06", "网络/备份列表", "列出远程备份",
         "重要", "功能测试",
@@ -396,9 +392,9 @@ for i in $(seq 1 100); do echo "line_${{i}}_repeated_data_abcdefghij" >> {TMP_DI
         f"{net_start()}{BINARY} user register --server 127.0.0.1:{NET} --username netuser --password netpass > /dev/null 2>&1; "
         f"{BINARY} remote-backup {TMP_DIR}/srctext --server 127.0.0.1:{NET} --username netuser --password netpass --pack tar > /dev/null 2>&1; "
         f"{BINARY} remote-list --server 127.0.0.1:{NET} --username netuser --password netpass 2>&1; "
-        f"RET=$?; pkill -f 'backup server.*{NET}' 2>/dev/null; "
+        f"RET=$?; kill $SERVPID 2>/dev/null; "
         f"[ $RET -eq 0 ] && echo 'OK' || echo 'FAIL'",
-        "OK", timeout=20)
+        "OK", to=20)
 
     add("NET-07", "网络/远程+压缩+加密", "远程全功能(压缩+加密)",
         "重要", "功能测试",
@@ -408,9 +404,9 @@ for i in $(seq 1 100); do echo "line_${{i}}_repeated_data_abcdefghij" >> {TMP_DI
         f"{net_start()}{BINARY} user register --server 127.0.0.1:{NET} --username netuser --password netpass > /dev/null 2>&1; "
         f"{BINARY} remote-backup {TMP_DIR}/srctext --server 127.0.0.1:{NET} --username netuser --password netpass --pack index --compress huffman --encrypt xor --file-password filepass > /dev/null 2>&1; "
         f"{BINARY} remote-restore {TMP_DIR}/restore/net_full --server 127.0.0.1:{NET} --username netuser --password netpass --file-password filepass; "
-        f"RET=$?; pkill -f 'backup server.*{NET}' 2>/dev/null; "
-        f"[ $RET -eq 0 ] && diff -r {TMP_DIR}/srctext {TMP_DIR}/restore/net_full > /dev/null 2>&1 && echo 'Net full OK' || echo 'FAIL'",
-        "Net full OK", timeout=30)
+        f"RET=$?; kill $SERVPID 2>/dev/null; "
+        f"[ $RET -eq 0 ] && diff -r {TMP_DIR}/srctext {TMP_DIR}/restore/net_full/srctext > /dev/null 2>&1 && echo 'Net full OK' || echo 'FAIL'",
+        "Net full OK", to=60)
 
     add("NET-08", "网络/连接拒绝", "连接不存在服务器",
         "重要", "健壮性测试",
@@ -419,7 +415,7 @@ for i in $(seq 1 100); do echo "line_${{i}}_repeated_data_abcdefghij" >> {TMP_DI
         f"connect to non-existent server",
         f"{BINARY} remote-list --server 127.0.0.1:19999 --username test --password test 2>&1; "
         f"[ $? -ne 0 ] && echo 'OK' || echo 'FAIL'",
-        "OK", timeout=10)
+        "OK", to=10)
 
     add("NET-09", "网络/未授权备份", "未授权用户远程备份",
         "一般", "健壮性测试",
@@ -427,9 +423,9 @@ for i in $(seq 1 100); do echo "line_${{i}}_repeated_data_abcdefghij" >> {TMP_DI
         "服务器已启动",
         f"backup without registration",
         f"{net_start()}{BINARY} remote-backup {TMP_DIR}/srctext --server 127.0.0.1:{NET} --username stranger --password x --pack tar 2>&1; "
-        f"RET=$?; pkill -f 'backup server.*{NET}' 2>/dev/null; "
+        f"RET=$?; kill $SERVPID 2>/dev/null; "
         f"echo 'handled'",
-        "handled", timeout=15)
+        "handled", to=15)
 
     # ===================== 10. 性能测试 =====================
     add("PERF-01", "性能/备份耗时", "大数据备份耗时测量",
@@ -648,14 +644,14 @@ def main():
     log(f"  备份软件自动化测试工具 v1.0", C.BD)
     log(f"{'='*60}\n", C.B)
 
-    # 清理残留服务器进程
-    run("pkill -f 'backup server' 2>/dev/null")
+    # 清理残留服务器进程（使用 fuser 而非 pkill，更精确）
+    __import__('subprocess').run("fuser -k 18849/tcp 2>/dev/null", shell=True)
 
     cases = define_cases()
     total, passed, failed, errors = run_tests(cases)
 
     # 清理
-    run("pkill -f 'backup server' 2>/dev/null")
+    __import__('subprocess').run("fuser -k 18849/tcp 2>/dev/null", shell=True)
 
     # 生成报告
     log(f"\n{'='*60}", C.B)

@@ -26,9 +26,9 @@ public:
     /// @param destDir   还原目标目录
     /// @param password  解密密码（仅当备份启用了加密时使用）
     /// @return 成功返回 true
-    bool run(const std::string& inputFile,
-             const std::string& destDir,
-             const std::string& password = "");
+    [[nodiscard]] bool run(const std::string& inputFile,
+                           const std::string& destDir,
+                           const std::string& password = "");
 
 private:
     PackManager*      packMgr_      = nullptr;

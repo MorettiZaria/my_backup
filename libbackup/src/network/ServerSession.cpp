@@ -47,8 +47,8 @@ void ServerSession::run() {
     auto& log = Logger::instance();
     log.info("[Session] New connection.");
 
-    // 设置 300 秒超时
-    socket_.setReceiveTimeout(300);
+    // 设置 30 秒超时，避免客户端异常断开时服务端无限等待
+    static_cast<void>(socket_.setReceiveTimeout(30));
 
     // 状态: HANDSHAKE
     if (!handleHandshake()) return;
@@ -316,9 +316,14 @@ bool ServerSession::handleBackup(NetworkMessage& firstMsg) {
               + " (" + std::to_string(wholeBak.size()) + " bytes).");
 
     // 发送确认
-    std::vector<uint8_t> ack;
-    writeStringBE(ack, backupId);
-    sendEncrypted(NetworkMessage::make(MessageType::BACKUP_COMPLETE, std::move(ack)));
+    {
+        std::vector<uint8_t> ack;
+        writeStringBE(ack, backupId);
+        if (!sendEncrypted(NetworkMessage::make(MessageType::BACKUP_COMPLETE, std::move(ack)))) {
+            log.error("[Session] Failed to send backup ack for " + backupId);
+            return false;
+        }
+    }
 
     return true;
 }
@@ -371,7 +376,10 @@ bool ServerSession::handleRestore(NetworkMessage& msg) {
         writeStringBE(filePayload, ".bak");
         writeUint64BE(filePayload, wholeBak.size());
         filePayload.insert(filePayload.end(), wholeBak.begin(), wholeBak.end());
-        sendEncrypted(NetworkMessage::make(MessageType::FILE_DATA, std::move(filePayload)));
+        if (!sendEncrypted(NetworkMessage::make(MessageType::FILE_DATA, std::move(filePayload)))) {
+            log.error("[Session] Failed to send restore file data.");
+            return false;
+        }
     }
 
     // 发送元数据
@@ -380,13 +388,21 @@ bool ServerSession::handleRestore(NetworkMessage& msg) {
         writeStringBE(metaPayload, ".bak_metadata");
         writeUint64BE(metaPayload, metadataBytes.size());
         metaPayload.insert(metaPayload.end(), metadataBytes.begin(), metadataBytes.end());
-        sendEncrypted(NetworkMessage::make(MessageType::FILE_DATA, std::move(metaPayload)));
+        if (!sendEncrypted(NetworkMessage::make(MessageType::FILE_DATA, std::move(metaPayload)))) {
+            log.error("[Session] Failed to send restore metadata.");
+            return false;
+        }
     }
 
     // 发送完成信号
-    std::vector<uint8_t> completePayload;
-    writeUint32BE(completePayload, static_cast<uint32_t>(metadata.size()));
-    sendEncrypted(NetworkMessage::make(MessageType::RESTORE_COMPLETE, std::move(completePayload)));
+    {
+        std::vector<uint8_t> completePayload;
+        writeUint32BE(completePayload, static_cast<uint32_t>(metadata.size()));
+        if (!sendEncrypted(NetworkMessage::make(MessageType::RESTORE_COMPLETE, std::move(completePayload)))) {
+            log.error("[Session] Failed to send restore complete.");
+            return false;
+        }
+    }
 
     log.info("[Session] Restore data sent.");
     return true;
@@ -395,6 +411,7 @@ bool ServerSession::handleRestore(NetworkMessage& msg) {
 // ===== 列出备份 =====
 
 bool ServerSession::handleListBackups() {
+    auto& log = Logger::instance();
     auto backups = storage_.listBackups(currentUser_);
 
     std::vector<uint8_t> payload;
@@ -406,7 +423,10 @@ bool ServerSession::handleListBackups() {
         writeUint64BE(payload, static_cast<uint64_t>(ts));
     }
 
-    sendEncrypted(NetworkMessage::make(MessageType::BACKUP_LIST_RESPONSE, std::move(payload)));
+    if (!sendEncrypted(NetworkMessage::make(MessageType::BACKUP_LIST_RESPONSE, std::move(payload)))) {
+        log.error("[Session] Failed to send backup list response.");
+        return false;
+    }
     return true;
 }
 

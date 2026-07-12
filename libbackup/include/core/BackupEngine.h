@@ -34,9 +34,9 @@ public:
     /// @param outputFile 输出备份文件路径
     /// @param password   加密密码（仅当启用了加密步骤时使用）
     /// @return 成功返回 true
-    bool run(const std::string& sourceDir,
-             const std::string& outputFile,
-             const std::string& password = "");
+    [[nodiscard]] bool run(const std::string& sourceDir,
+                           const std::string& outputFile,
+                           const std::string& password = "");
 
 private:
     IPackStrategy*      packStrategy_     = nullptr;

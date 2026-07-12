@@ -1,6 +1,23 @@
-# 手动测试指南
+# 测试指南
 
-## 测试数据
+## 自动化测试（推荐）
+
+```bash
+# 在项目根目录执行
+python3 tests/run_tests.py
+```
+
+脚本会自动完成编译（如未编译）、运行全部测试用例（单机 + 网络），并生成 `tests/test_report.md` 测试报告。
+
+测试覆盖：
+- 单机模式：tar/index 打包、RLE/Huffman 压缩、XOR/Vigenere 加密、全功能组合
+- 网络模式（启用`127.0.0.1`，即以本地机器为服务端口）：用户注册/登录、远程备份/还原、远程备份列表、加密传输
+- 健壮性：错误密码、重复注册、非法参数、连接拒绝
+- 性能：压缩率对比
+
+## 手动测试
+
+### 测试数据
 
 `testdata/` 目录是一个模拟真实场景的目录树，用作备份的**源目录**。
 
@@ -39,71 +56,71 @@
 ```bash
 mkdir -p build && cd build && cmake .. && make -j$(nproc) && cd ..
 ```
-编译成功后，可执行文件位于 `build/backup`。
+编译成功后，可执行文件位于 `build/client/backup`。
 
 ### 2. 测试打包（tar）
 
 ```bash
-./build/backup backup tests/testdata tests/output_tar.bak --pack tar
-./build/backup restore tests/output_tar.bak tests/restored_tar
+./build/client/backup backup tests/testdata tests/output_tar.bak --pack tar
+./build/client/backup restore tests/output_tar.bak tests/restored_tar
 diff -r tests/testdata tests/restored_tar
 ```
 
 ### 3. 测试打包（index）
 
 ```bash
-./build/backup backup tests/testdata tests/output_idx.bak --pack index
-./build/backup restore tests/output_idx.bak tests/restored_idx
+./build/client/backup backup tests/testdata tests/output_idx.bak --pack index
+./build/client/backup restore tests/output_idx.bak tests/restored_idx
 diff -r tests/testdata tests/restored_idx
 ```
 
 ### 4. 测试打包 + 压缩（RLE）
 
 ```bash
-./build/backup backup tests/testdata tests/output_rle.bak --pack tar --compress rle
+./build/client/backup backup tests/testdata tests/output_rle.bak --pack tar --compress rle
 # 观察：big_repeat.txt 有 50KB 重复数据，RLE 压缩效果应该很明显
 ls -lh tests/output_tar.bak tests/output_rle.bak
-./build/backup restore tests/output_rle.bak tests/restored_rle
+./build/client/backup restore tests/output_rle.bak tests/restored_rle
 diff -r tests/testdata tests/restored_rle
 ```
 
 ### 5. 测试打包 + 压缩（Huffman）
 
 ```bash
-./build/backup backup tests/testdata tests/output_huff.bak --pack tar --compress huffman
+./build/client/backup backup tests/testdata tests/output_huff.bak --pack tar --compress huffman
 ls -lh tests/output_tar.bak tests/output_huff.bak
-./build/backup restore tests/output_huff.bak tests/restored_huff
+./build/client/backup restore tests/output_huff.bak tests/restored_huff
 diff -r tests/testdata tests/restored_huff
 ```
 
 ### 6. 测试加密（XOR）
 
 ```bash
-./build/backup backup tests/testdata tests/output_xor.bak --pack tar --encrypt xor --password mypass
+./build/client/backup backup tests/testdata tests/output_xor.bak --pack tar --encrypt xor --password mypass
 # 查看加密后的文件是否无法直接读懂
 xxd tests/output_xor.bak | head -5
-./build/backup restore tests/output_xor.bak tests/restored_xor --password mypass
+./build/client/backup restore tests/output_xor.bak tests/restored_xor --password mypass
 diff -r tests/testdata tests/restored_xor
 ```
 
 ### 7. 测试加密（Vigenere）
 
 ```bash
-./build/backup backup tests/testdata tests/output_vig.bak --pack tar --encrypt vigenere --password mypass
-./build/backup restore tests/output_vig.bak tests/restored_vig --password mypass
+./build/client/backup backup tests/testdata tests/output_vig.bak --pack tar --encrypt vigenere --password mypass
+./build/client/backup restore tests/output_vig.bak tests/restored_vig --password mypass
 diff -r tests/testdata tests/restored_vig
 ```
 
 ### 8. 全功能组合
 
 ```bash
-./build/backup backup tests/testdata tests/output_full.bak \
+./build/client/backup backup tests/testdata tests/output_full.bak \
     --pack index --compress huffman --encrypt xor --password s3cret
 
 ls -lh tests/output_full.bak
 
 # 还原时不指定算法（自动从文件头识别）
-./build/backup restore tests/output_full.bak tests/restored_full --password s3cret
+./build/client/backup restore tests/output_full.bak tests/restored_full --password s3cret
 
 # 逐文件比对
 diff -r tests/testdata tests/restored_full
@@ -121,7 +138,7 @@ readlink tests/restored_tar/broken_link               # 应输出 /nonexistent/p
 
 ```bash
 # 用错误密码还原，数据应该损坏
-./build/backup restore tests/output_xor.bak tests/restored_bad --password wrongpass
+./build/client/backup restore tests/output_xor.bak tests/restored_bad --password wrongpass
 # 看内容是否已损坏：
 cat tests/restored_bad/hello.txt
 ```
@@ -130,7 +147,7 @@ cat tests/restored_bad/hello.txt
 
 ## 第二部分：网络模式（网盘模式）测试
 
-网络模式测试分为**同机器测试**（使用 `127.0.0.1`）和**跨机器测试**（使用局域网 IP）。
+网络模式测试中使用`127.0.0.1`即为以本地机器为服务端，如果有服务器可做服务端，IP配置为服务器的IP即可。
 
 ### 前置：编译
 
@@ -143,7 +160,7 @@ mkdir -p build && cd build && cmake .. && make -j$(nproc) && cd ..
 ```bash
 # 启动服务器（后台运行）
 # 服务器绑定 0.0.0.0:18848，允许来自任何 IP 的连接
-./build/backup server start --port 18848 --storage /tmp/test_server_data &
+./build/client/backup server start --port 18848 --storage /tmp/test_server_data &
 SERVER_PID=$!
 sleep 1
 
@@ -155,25 +172,25 @@ kill -0 $SERVER_PID && echo "Server is running" || echo "Server failed to start"
 
 ```bash
 # 注册新用户
-./build/backup user register \
+./build/client/backup user register \
     --server 127.0.0.1:18848 \
     --username testuser --password testpass
 # 预期: User registered successfully.
 
 # 重复注册（应失败）
-./build/backup user register \
+./build/client/backup user register \
     --server 127.0.0.1:18848 \
     --username testuser --password testpass
 # 预期: Error: registration failed (user may already exist).
 
 # 正确密码登录
-./build/backup user login \
+./build/client/backup user login \
     --server 127.0.0.1:18848 \
     --username testuser --password testpass
 # 预期: Login successful.
 
 # 错误密码登录（应失败）
-./build/backup user login \
+./build/client/backup user login \
     --server 127.0.0.1:18848 \
     --username testuser --password wrongpass
 # 预期: Error: login failed (wrong password?).
@@ -183,7 +200,7 @@ kill -0 $SERVER_PID && echo "Server is running" || echo "Server failed to start"
 
 ```bash
 # 远程备份（打包 = tar）
-./build/backup remote-backup tests/testdata \
+./build/client/backup remote-backup tests/testdata \
     --server 127.0.0.1:18848 \
     --username testuser --password testpass \
     --pack tar
@@ -198,7 +215,7 @@ ls -la /tmp/test_server_data/testuser/backup_000001/
 
 ```bash
 # 远程还原
-./build/backup remote-restore /tmp/test_restore_remote \
+./build/client/backup remote-restore /tmp/test_restore_remote \
     --server 127.0.0.1:18848 \
     --username testuser --password testpass
 
@@ -226,7 +243,7 @@ stat -c '%a' /tmp/test_restore_remote/data.txt
 ### 测试 N5：列出备份
 
 ```bash
-./build/backup remote-list \
+./build/client/backup remote-list \
     --server 127.0.0.1:18848 \
     --username testuser --password testpass
 # 预期: 显示备份列表（含 backup ID 和时间戳）
@@ -236,7 +253,7 @@ stat -c '%a' /tmp/test_restore_remote/data.txt
 
 ```bash
 # 全功能远程备份
-./build/backup remote-backup tests/testdata \
+./build/client/backup remote-backup tests/testdata \
     --server 127.0.0.1:18848 \
     --username testuser --password testpass \
     --pack index --compress huffman \
@@ -247,7 +264,7 @@ xxd /tmp/test_server_data/testuser/backup_000002/payload.bin | head -3
 # 预期: 不可读的二进制数据
 
 # 正确密码还原
-./build/backup remote-restore /tmp/test_restore_enc \
+./build/client/backup remote-restore /tmp/test_restore_enc \
     --server 127.0.0.1:18848 \
     --username testuser --password testpass \
     --file-password filepass
@@ -256,7 +273,7 @@ diff -r tests/testdata /tmp/test_restore_enc
 # 预期: 无差异
 
 # 错误文件密码还原（数据应损坏）
-./build/backup remote-restore /tmp/test_restore_bad \
+./build/client/backup remote-restore /tmp/test_restore_bad \
     --server 127.0.0.1:18848 \
     --username testuser --password testpass \
     --file-password wrongpass
@@ -268,57 +285,26 @@ cat /tmp/test_restore_bad/hello.txt
 
 ```bash
 # 连接不存在用户（用户未注册就直接备份）
-./build/backup remote-backup tests/testdata \
+./build/client/backup remote-backup tests/testdata \
     --server 127.0.0.1:18848 \
     --username nonexist --password testpass \
     --pack tar
 # 预期: Login failed, trying to register... (注册成功则继续备份)
 
 # 连接不存在的服务器
-./build/backup remote-list \
+./build/client/backup remote-list \
     --server 127.0.0.1:19999 \
     --username testuser --password testpass
 # 预期: Connection refused.
 
 # 未备份过的用户尝试还原
-./build/backup user register \
+./build/client/backup user register \
     --server 127.0.0.1:18848 \
     --username newuser --password newpass
-./build/backup remote-restore /tmp/test_restore_empty \
+./build/client/backup remote-restore /tmp/test_restore_empty \
     --server 127.0.0.1:18848 \
     --username newuser --password newpass
 # 预期: No backup found.
-```
-
-### 测试 N8：跨机器通信
-
-```bash
-# === 场景：两台 Linux 电脑在同一局域网 ===
-#
-# 前提：两台电脑连接同一个 WiFi，且路由器未开启 AP 隔离
-#
-# 服务器端 (IP 假设为 192.168.1.100):
-./build/backup server start --port 8848 --storage ./server_data
-# 输出: Listening on 0.0.0.0:8848
-#
-# 客户端 (另一台电脑上执行，先确保能 ping 通服务器):
-ping 192.168.1.100
-#
-./build/backup user register \
-    --server 192.168.1.100:8848 \
-    --username remoteuser --password remotepass
-#
-./build/backup remote-backup /home/user/documents \
-    --server 192.168.1.100:8848 \
-    --username remoteuser --password remotepass \
-    --pack tar
-#
-./build/backup remote-restore /home/user/restored \
-    --server 192.168.1.100:8848 \
-    --username remoteuser --password remotepass
-#
-diff -r /home/user/documents /home/user/restored
-# 预期: 无差异
 ```
 
 > **故障排除**：

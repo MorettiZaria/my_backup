@@ -21,22 +21,6 @@ namespace {
             return static_cast<uint8_t>(state & 0xFF);
         }
     };
-
-    uint32_t seedFromString(const std::string& s) {
-        uint32_t seed = 0;
-        for (char c : s) {
-            seed = seed * 31 + static_cast<uint8_t>(c);
-        }
-        return seed;
-    }
-
-    uint64_t readLE64(const std::vector<uint8_t>& data, size_t offset) {
-        uint64_t v = 0;
-        for (int i = 0; i < 8 && offset + i < data.size(); ++i) {
-            v |= static_cast<uint64_t>(data[offset + i]) << (i * 8);
-        }
-        return v;
-    }
 }
 
 // ===== 密码哈希 =====

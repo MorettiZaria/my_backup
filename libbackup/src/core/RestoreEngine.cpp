@@ -5,9 +5,20 @@
 #include <fstream>
 #include <algorithm>
 #include <stdexcept>
+#include <cstring>
 #include <sys/stat.h>
 #include <fcntl.h>
 #include <unistd.h>
+
+namespace {
+    /// 仅当 errno 不是 EEXIST（目录已存在）时输出 warning
+    void warnSyscall(const char* call, const std::string& path) {
+        if (errno == EEXIST) return;
+        if (errno == EPERM || errno == EACCES) return;  // 权限不足是预期的
+        std::cerr << "Warning: " << call << " failed on '" << path
+                  << "': " << std::strerror(errno) << std::endl;
+    }
+}
 
 RestoreEngine::RestoreEngine() {}
 
@@ -148,9 +159,15 @@ bool RestoreEngine::run(const std::string& inputFile,
         size_t pos = 0;
         while ((pos = path.find('/', pos + 1)) != std::string::npos) {
             std::string sub = path.substr(0, pos);
-            mkdir(sub.c_str(), 0755);
+            if (mkdir(sub.c_str(), 0755) != 0 && errno != EEXIST) {
+                std::cerr << "Warning: mkdir failed on '" << sub
+                          << "': " << std::strerror(errno) << std::endl;
+            }
         }
-        mkdir(path.c_str(), 0755);
+        if (mkdir(path.c_str(), 0755) != 0 && errno != EEXIST) {
+            std::cerr << "Warning: mkdir failed on '" << path
+                      << "': " << std::strerror(errno) << std::endl;
+        }
     };
 
     // 7a. 创建所有目录（按路径排序）
@@ -174,8 +191,10 @@ bool RestoreEngine::run(const std::string& inputFile,
             if (lastSlash != std::string::npos) {
                 mkdirRecursive(fullPath.substr(0, lastSlash));
             }
-            unlink(fullPath.c_str());
-            symlink(info.symlinkTarget.c_str(), fullPath.c_str());
+            unlink(fullPath.c_str());  // 失败也继续（文件可能不存在）
+            if (symlink(info.symlinkTarget.c_str(), fullPath.c_str()) != 0) {
+                warnSyscall("symlink", fullPath);
+            }
         }
     }
 
@@ -186,12 +205,16 @@ bool RestoreEngine::run(const std::string& inputFile,
             size_t lastSlash = fullPath.rfind('/');
             if (lastSlash != std::string::npos) mkdirRecursive(fullPath.substr(0, lastSlash));
             unlink(fullPath.c_str());
-            mkfifo(fullPath.c_str(), info.permissions);
+            if (mkfifo(fullPath.c_str(), info.permissions) != 0) {
+                warnSyscall("mkfifo", fullPath);
+            }
         } else if (info.fileType == S_IFBLK || info.fileType == S_IFCHR) {
             size_t lastSlash = fullPath.rfind('/');
             if (lastSlash != std::string::npos) mkdirRecursive(fullPath.substr(0, lastSlash));
             unlink(fullPath.c_str());
-            mknod(fullPath.c_str(), info.fileType | info.permissions, info.deviceId);
+            if (mknod(fullPath.c_str(), info.fileType | info.permissions, info.deviceId) != 0) {
+                warnSyscall("mknod", fullPath);
+            }
         }
     }
 
@@ -237,10 +260,14 @@ bool RestoreEngine::restoreMetadata(const std::string& destDir,
         std::string fullPath = destDir + "/" + info.relativePath;
 
         // chmod
-        chmod(fullPath.c_str(), info.permissions);
+        if (chmod(fullPath.c_str(), info.permissions) != 0) {
+            warnSyscall("chmod", fullPath);
+        }
 
-        // chown（忽略失败，通常需要 root 权限）
-        lchown(fullPath.c_str(), info.owner, info.group);
+        // chown（通常需要 root 权限，非 root 失败是预期的）
+        if (lchown(fullPath.c_str(), info.owner, info.group) != 0 && errno != EPERM) {
+            warnSyscall("lchown", fullPath);
+        }
 
         // utimensat：设置 atime 和 mtime
         struct timespec times[2];
@@ -248,7 +275,9 @@ bool RestoreEngine::restoreMetadata(const std::string& destDir,
         times[0].tv_nsec = 0;
         times[1].tv_sec  = info.mtime;
         times[1].tv_nsec = 0;
-        utimensat(AT_FDCWD, fullPath.c_str(), times, AT_SYMLINK_NOFOLLOW);
+        if (utimensat(AT_FDCWD, fullPath.c_str(), times, AT_SYMLINK_NOFOLLOW) != 0) {
+            warnSyscall("utimensat", fullPath);
+        }
     }
 
     return true;

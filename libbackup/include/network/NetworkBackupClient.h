@@ -23,11 +23,11 @@ public:
     /// @param compressStrategy 压缩策略（nullptr=不压缩）
     /// @param encryptStrategy 加密策略（nullptr=不加密）
     /// @param filePassword 文件加密密码
-    bool run(const std::string& sourceDir,
-             IPackStrategy* packStrategy,
-             ICompressStrategy* compressStrategy,
-             IEncryptStrategy* encryptStrategy,
-             const std::string& filePassword = "");
+    [[nodiscard]] bool run(const std::string& sourceDir,
+                           IPackStrategy* packStrategy,
+                           ICompressStrategy* compressStrategy,
+                           IEncryptStrategy* encryptStrategy,
+                           const std::string& filePassword = "");
 
 private:
     std::string host_;

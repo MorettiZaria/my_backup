@@ -1,14 +1,6 @@
 #include "core/BackupEngine.h"
 #include "core/RestoreEngine.h"
-#include "pack/TarPackStrategy.h"
-#include "pack/IndexPackStrategy.h"
-#include "pack/PackManager.h"
-#include "compress/RleCompressStrategy.h"
-#include "compress/HuffmanCompressStrategy.h"
-#include "compress/CompressManager.h"
-#include "encrypt/XorEncryptStrategy.h"
-#include "encrypt/VigenereEncryptStrategy.h"
-#include "encrypt/EncryptManager.h"
+#include "core/StrategyFactory.h"
 
 // 网络模块
 #include "network/BackupServer.h"
@@ -280,16 +272,9 @@ int main(int argc, char* argv[]) {
 
         // 初始化策略
         PackManager packMgr;
-        packMgr.registerStrategy(std::make_unique<TarPackStrategy>());
-        packMgr.registerStrategy(std::make_unique<IndexPackStrategy>());
-
         CompressManager compressMgr;
-        compressMgr.registerStrategy(std::make_unique<RleCompressStrategy>());
-        compressMgr.registerStrategy(std::make_unique<HuffmanCompressStrategy>());
-
         EncryptManager encryptMgr;
-        encryptMgr.registerStrategy(std::make_unique<XorEncryptStrategy>());
-        encryptMgr.registerStrategy(std::make_unique<VigenereEncryptStrategy>());
+        registerAllStrategies(packMgr, compressMgr, encryptMgr);
 
         auto* pack = packMgr.select(packName);
         if (!pack) {
@@ -431,16 +416,9 @@ int main(int argc, char* argv[]) {
 
         // 初始化管理器并注册所有策略
         PackManager packMgr;
-        packMgr.registerStrategy(std::make_unique<TarPackStrategy>());
-        packMgr.registerStrategy(std::make_unique<IndexPackStrategy>());
-
         CompressManager compressMgr;
-        compressMgr.registerStrategy(std::make_unique<RleCompressStrategy>());
-        compressMgr.registerStrategy(std::make_unique<HuffmanCompressStrategy>());
-
         EncryptManager encryptMgr;
-        encryptMgr.registerStrategy(std::make_unique<XorEncryptStrategy>());
-        encryptMgr.registerStrategy(std::make_unique<VigenereEncryptStrategy>());
+        registerAllStrategies(packMgr, compressMgr, encryptMgr);
 
         if (command == "backup") {
             auto* pack = packMgr.select(packName);

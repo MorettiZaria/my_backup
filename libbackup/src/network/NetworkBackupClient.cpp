@@ -138,9 +138,20 @@ bool NetworkBackupClient::run(const std::string& sourceDir,
     std::cout << "Server: " << host_ << ":" << port_ << std::endl;
     std::cout << "Source: " << sourceDir << std::endl;
 
-    // 1. 连接
-    if (!socket_.connect(host_, port_)) {
-        std::cerr << "Error: cannot connect to server." << std::endl;
+    // 1. 连接（重试最多 5 次，应对服务器尚未就绪的情况）
+    bool connected = false;
+    for (int retry = 0; retry < 5; ++retry) {
+        if (socket_.connect(host_, port_)) {
+            connected = true;
+            break;
+        }
+        if (retry < 4) {
+            std::cerr << "Connection failed, retrying in 500ms..." << std::endl;
+            usleep(500000);
+        }
+    }
+    if (!connected) {
+        std::cerr << "Error: cannot connect to server after 5 attempts." << std::endl;
         return false;
     }
 

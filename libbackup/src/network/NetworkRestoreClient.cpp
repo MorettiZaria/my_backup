@@ -103,8 +103,20 @@ bool NetworkRestoreClient::doLogin() {
 // ===== 列出备份 =====
 
 bool NetworkRestoreClient::listBackups() {
-    if (!socket_.connect(host_, port_)) {
-        std::cerr << "Error: cannot connect to server." << std::endl;
+    // 连接（重试最多 5 次）
+    bool connected = false;
+    for (int retry = 0; retry < 5; ++retry) {
+        if (socket_.connect(host_, port_)) {
+            connected = true;
+            break;
+        }
+        if (retry < 4) {
+            std::cerr << "Connection failed, retrying in 500ms..." << std::endl;
+            usleep(500000);
+        }
+    }
+    if (!connected) {
+        std::cerr << "Error: cannot connect to server after 5 attempts." << std::endl;
         return false;
     }
     if (!doHandshake()) return false;
@@ -141,9 +153,20 @@ bool NetworkRestoreClient::run(const std::string& destDir,
     std::cout << "Server: " << host_ << ":" << port_ << std::endl;
     std::cout << "Destination: " << destDir << std::endl;
 
-    // 1. 连接 + 握手 + 登录
-    if (!socket_.connect(host_, port_)) {
-        std::cerr << "Error: cannot connect to server." << std::endl;
+    // 1. 连接 + 握手 + 登录（连接重试最多 5 次）
+    bool connected = false;
+    for (int retry = 0; retry < 5; ++retry) {
+        if (socket_.connect(host_, port_)) {
+            connected = true;
+            break;
+        }
+        if (retry < 4) {
+            std::cerr << "Connection failed, retrying in 500ms..." << std::endl;
+            usleep(500000);
+        }
+    }
+    if (!connected) {
+        std::cerr << "Error: cannot connect to server after 5 attempts." << std::endl;
         return false;
     }
     if (!doHandshake()) return false;

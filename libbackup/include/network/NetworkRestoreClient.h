@@ -19,12 +19,12 @@ public:
     /// @param backupId 备份 ID（空=使用最新备份）
     /// @param filePassword 文件解密密码
     /// @return 成功返回 true
-    bool run(const std::string& destDir,
-             const std::string& backupId = "",
-             const std::string& filePassword = "");
+    [[nodiscard]] bool run(const std::string& destDir,
+                           const std::string& backupId = "",
+                           const std::string& filePassword = "");
 
     /// 列出远程备份
-    bool listBackups();
+    [[nodiscard]] bool listBackups();
 
 private:
     std::string host_;
