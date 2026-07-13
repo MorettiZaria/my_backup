@@ -4,6 +4,7 @@
 #include "tabs/RemoteBackupTab.h"
 #include "tabs/RemoteRestoreTab.h"
 #include "tabs/RemoteListTab.h"
+#include "tabs/UserManagementTab.h"
 
 #include <QTabWidget>
 #include <QStatusBar>
@@ -20,6 +21,7 @@ MainWindow::MainWindow(QWidget* parent)
     tabWidget_->addTab(new RemoteBackupTab,   "☁ 远程备份");
     tabWidget_->addTab(new RemoteRestoreTab,  "📥 远程还原");
     tabWidget_->addTab(new RemoteListTab,     "📋 远程列表");
+    tabWidget_->addTab(new UserManagementTab, "👤 用户管理");
 
     setCentralWidget(tabWidget_);
 

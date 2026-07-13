@@ -8,11 +8,13 @@ set(GUI_HEADERS
     include/tabs/RemoteBackupTab.h
     include/tabs/RemoteRestoreTab.h
     include/tabs/RemoteListTab.h
+    include/tabs/UserManagementTab.h
     include/workers/BackupWorker.h
     include/workers/RestoreWorker.h
     include/workers/RemoteBackupWorker.h
     include/workers/RemoteRestoreWorker.h
     include/workers/RemoteListWorker.h
+    include/workers/RegisterWorker.h
 )
 
 set(GUI_SOURCES
@@ -24,11 +26,13 @@ set(GUI_SOURCES
     src/tabs/RemoteBackupTab.cpp
     src/tabs/RemoteRestoreTab.cpp
     src/tabs/RemoteListTab.cpp
+    src/tabs/UserManagementTab.cpp
     src/workers/BackupWorker.cpp
     src/workers/RestoreWorker.cpp
     src/workers/RemoteBackupWorker.cpp
     src/workers/RemoteRestoreWorker.cpp
     src/workers/RemoteListWorker.cpp
+    src/workers/RegisterWorker.cpp
 )
 
 add_executable(backup-gui ${GUI_SOURCES} ${GUI_HEADERS})
