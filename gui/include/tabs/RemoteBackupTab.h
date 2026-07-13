@@ -35,6 +35,7 @@ private:
     QComboBox* packCombo_;
     QComboBox* compressCombo_;
     QComboBox* encryptCombo_;
+    QLineEdit* backupNameEdit_;     // 备份名称（可选）
     QLineEdit* filePasswordEdit_;   // 文件加密密码
 
     QPushButton* startBtn_;

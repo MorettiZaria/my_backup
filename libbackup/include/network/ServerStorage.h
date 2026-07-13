@@ -15,6 +15,16 @@ public:
     /// 为指定用户创建新备份，返回 backupId（如 "backup_000001"）
     std::string createBackup(const std::string& username);
 
+    /// 备份名称管理（用户可设置的可读名称，与 backupId 分离）
+    bool saveBackupName(const std::string& username,
+                        const std::string& backupId,
+                        const std::string& name);
+    std::string getBackupName(const std::string& username,
+                              const std::string& backupId);
+    /// 检查用户是否已有同名备份；返回已存在的 backupId（空串=不存在）
+    std::string findBackupByName(const std::string& username,
+                                  const std::string& name);
+
     /// 保存备份组件
     bool saveHeader(const std::string& username,
                     const std::string& backupId,

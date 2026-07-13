@@ -18,6 +18,7 @@ enum class MessageType : uint16_t {
     REGISTER_RESPONSE    = 0x0006,  // S→C: [status:1B] (0=OK, 1=用户已存在)
 
     // === 备份阶段 ===
+    BACKUP_START         = 0x0015,  // C→S: [nameLen:2B][name]（可选，空=自动生成）
     FILE_DATA            = 0x0009,  // 双向: [pathLen:2B][path][dataLen:8B][data]
     BACKUP_COMPLETE      = 0x000A,  // C→S: 空载荷
 
@@ -66,6 +67,7 @@ namespace ErrorCode {
     constexpr uint16_t SERVER_ERROR         = 0x0007;
     constexpr uint16_t INVALID_MESSAGE      = 0x0008;
     constexpr uint16_t SESSION_TIMEOUT      = 0x0009;
+    constexpr uint16_t NAME_EXISTS         = 0x000A;
 }
 
 // 协议常量

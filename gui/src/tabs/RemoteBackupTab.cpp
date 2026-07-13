@@ -41,6 +41,10 @@ RemoteBackupTab::RemoteBackupTab(QWidget* parent)
     form->addRow("源目录:", srcRow);
     connect(srcBrowseBtn, &QPushButton::clicked, this, &RemoteBackupTab::onBrowseSource);
 
+    backupNameEdit_ = new QLineEdit;
+    backupNameEdit_->setPlaceholderText("留空则自动生成（如 backup_000001）");
+    form->addRow("备份名称:", backupNameEdit_);
+
     packCombo_ = new QComboBox;
     packCombo_->addItems({"tar", "index"});
     form->addRow("打包方式:", packCombo_);
@@ -128,7 +132,8 @@ void RemoteBackupTab::onStartBackup() {
     auto* worker = new RemoteBackupWorker(server,
                                           static_cast<uint16_t>(portSpin_->value()),
                                           username, password, src,
-                                          pack, compress, encrypt, filePassword);
+                                          pack, compress, encrypt, filePassword,
+                                          backupNameEdit_->text().trimmed());
     worker->moveToThread(thread);
 
     connect(thread, &QThread::started, worker, &RemoteBackupWorker::run);
@@ -162,6 +167,7 @@ void RemoteBackupTab::setFormEnabled(bool enabled) {
     usernameEdit_->setEnabled(enabled);
     passwordEdit_->setEnabled(enabled);
     sourceDirEdit_->setEnabled(enabled);
+    backupNameEdit_->setEnabled(enabled);
     packCombo_->setEnabled(enabled);
     compressCombo_->setEnabled(enabled);
     encryptCombo_->setEnabled(enabled);

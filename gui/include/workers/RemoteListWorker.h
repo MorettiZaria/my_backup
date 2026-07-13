@@ -9,6 +9,7 @@
 /// 备份列表条目
 struct BackupEntry {
     QString id;
+    QString name;        // 用户设置的备份名称
     uint64_t timestamp;  // Unix 时间戳
 };
 

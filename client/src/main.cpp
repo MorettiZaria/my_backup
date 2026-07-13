@@ -33,6 +33,7 @@ Options:
   --encrypt <xor|vigenere>  Encrypt strategy (default: none)
   --password <password>     Password for file encryption (local mode)
   --file-password <pwd>     Password for file encryption (remote mode)
+  --backup-name <name>      Backup name for remote backup (default: auto-generated)
   --backup-id <id>          Backup ID for restore (remote mode, default: latest)
   --port <port>             Server port (default: 8848)
   --storage <path>          Server storage path (default: ./server_data)
@@ -246,6 +247,7 @@ int main(int argc, char* argv[]) {
     if (command == "remote-backup") {
         std::string sourceDir, serverAddr, username, password;
         std::string packName = "tar", compressName, encryptName, filePassword;
+        std::string backupName;
 
         int i = 2;
         if (i < argc && argv[i][0] != '-') sourceDir = argv[i++];
@@ -258,6 +260,7 @@ int main(int argc, char* argv[]) {
             else if (opt == "--compress" && i + 1 < argc) compressName = argv[++i];
             else if (opt == "--encrypt" && i + 1 < argc) encryptName = argv[++i];
             else if (opt == "--file-password" && i + 1 < argc) filePassword = argv[++i];
+            else if (opt == "--backup-name" && i + 1 < argc) backupName = argv[++i];
             ++i;
         }
 
@@ -305,6 +308,9 @@ int main(int argc, char* argv[]) {
         }
 
         NetworkBackupClient client(host, port, username, password);
+        if (!backupName.empty()) {
+            client.setBackupName(backupName);
+        }
         return client.run(sourceDir, pack, compress, encrypt, filePassword) ? 0 : 1;
     }
 

@@ -13,6 +13,10 @@ NetworkBackupClient::NetworkBackupClient(const std::string& host, uint16_t port,
                                            const std::string& password)
     : host_(host), port_(port), username_(username), password_(password) {}
 
+void NetworkBackupClient::setBackupName(const std::string& name) {
+    backupName_ = name;
+}
+
 // ===== 收发 =====
 
 bool NetworkBackupClient::sendEncrypted(const NetworkMessage& msg) {
@@ -165,13 +169,23 @@ bool NetworkBackupClient::run(const std::string& sourceDir,
         std::cout << "Registered successfully." << std::endl;
     }
 
-    // 4. 扫描源目录
+    // 4. 发送自定义备份名（如有）
+    if (!backupName_.empty()) {
+        std::vector<uint8_t> namePayload;
+        writeStringBE(namePayload, backupName_);
+        if (!sendEncrypted(NetworkMessage::make(MessageType::BACKUP_START, std::move(namePayload)))) {
+            std::cerr << "Error: failed to send backup name." << std::endl;
+            return false;
+        }
+    }
+
+    // 5. 扫描源目录
     std::cout << "Scanning directory tree..." << std::endl;
     FileScanner scanner;
     auto files = scanner.scan(sourceDir);
     std::cout << "  Found " << files.size() << " entries." << std::endl;
 
-    // 5. 构建 .bak 文件
+    // 6. 构建 .bak 文件
     std::cout << "Building backup..." << std::endl;
     BackupEngine engine;
     engine.setPackStrategy(packStrategy);

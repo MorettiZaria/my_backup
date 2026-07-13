@@ -21,6 +21,7 @@ public:
                                 ICompressStrategy* compress,
                                 IEncryptStrategy* encrypt,
                                 const QString& filePassword,
+                                const QString& backupName = {},
                                 QObject* parent = nullptr);
 
 public slots:
@@ -40,6 +41,7 @@ private:
     ICompressStrategy* compress_;
     IEncryptStrategy* encrypt_;
     QString filePassword_;
+    QString backupName_;
 };
 
 #endif // GUI_REMOTEBACKUPWORKER_H

@@ -137,8 +137,13 @@ bool NetworkRestoreClient::listBackups() {
     std::cout << "Backups for " << username_ << " (" << count << " total):" << std::endl;
     for (uint32_t i = 0; i < count; ++i) {
         std::string id = readStringBE(resp.payload.data(), off);
+        std::string name = readStringBE(resp.payload.data(), off);
         uint64_t ts = readUint64BE(resp.payload.data(), off);
-        std::cout << "  " << id << "  (timestamp: " << ts << ")" << std::endl;
+        if (!name.empty()) {
+            std::cout << "  " << id << "  \"" << name << "\"  (timestamp: " << ts << ")" << std::endl;
+        } else {
+            std::cout << "  " << id << "  (timestamp: " << ts << ")" << std::endl;
+        }
     }
 
     return true;

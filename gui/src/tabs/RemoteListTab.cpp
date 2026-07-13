@@ -44,10 +44,11 @@ RemoteListTab::RemoteListTab(QWidget* parent)
     mainLayout->addWidget(progressBar_);
 
     // 备份列表表格
-    table_ = new QTableWidget(0, 2);
-    table_->setHorizontalHeaderLabels({"备份 ID", "时间戳"});
+    table_ = new QTableWidget(0, 3);
+    table_->setHorizontalHeaderLabels({"备份名称", "备份 ID", "时间戳"});
     table_->horizontalHeader()->setStretchLastSection(true);
-    table_->horizontalHeader()->setSectionResizeMode(0, QHeaderView::ResizeToContents);
+    table_->horizontalHeader()->setSectionResizeMode(0, QHeaderView::Stretch);
+    table_->horizontalHeader()->setSectionResizeMode(1, QHeaderView::ResizeToContents);
     table_->setEditTriggers(QAbstractItemView::NoEditTriggers);
     table_->setSelectionBehavior(QAbstractItemView::SelectRows);
     table_->setAlternatingRowColors(true);
@@ -110,13 +111,17 @@ void RemoteListTab::onWorkerFinished(bool success, const QString& message,
         log(QString("✓ %1").arg(message));
         table_->setRowCount(entries.size());
         for (int i = 0; i < entries.size(); ++i) {
+            // 名称列：显示用户设置的名称或自动生成提示
+            QString displayName = entries[i].name.isEmpty()
+                ? "(自动生成)" : entries[i].name;
+            auto* nameItem = new QTableWidgetItem(displayName);
             auto* idItem = new QTableWidgetItem(entries[i].id);
-            // 转换时间戳为可读格式
             QDateTime dt = QDateTime::fromSecsSinceEpoch(
                 static_cast<qint64>(entries[i].timestamp));
             auto* tsItem = new QTableWidgetItem(dt.toString("yyyy-MM-dd hh:mm:ss"));
-            table_->setItem(i, 0, idItem);
-            table_->setItem(i, 1, tsItem);
+            table_->setItem(i, 0, nameItem);
+            table_->setItem(i, 1, idItem);
+            table_->setItem(i, 2, tsItem);
         }
         table_->resizeColumnsToContents();
     } else {

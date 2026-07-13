@@ -84,6 +84,7 @@ void ServerSession::run() {
         switch (static_cast<MessageType>(msg.type)) {
         case MessageType::FILE_DATA:
         case MessageType::BACKUP_COMPLETE:
+        case MessageType::BACKUP_START:
             if (!handleBackup(msg)) return;
             break;
         case MessageType::RESTORE_REQUEST:
@@ -242,12 +243,43 @@ bool ServerSession::handleBackup(NetworkMessage& firstMsg) {
     auto& log = Logger::instance();
     log.info("[Session] Receiving backup...");
 
-    std::string backupId = storage_.createBackup(currentUser_);
+    std::string backupId;
     std::vector<uint8_t> wholeBak;
     std::vector<uint8_t> metadataBytes;
 
-    // 处理已接收的第一条消息 + 后续消息
+    // 处理第一条消息
     NetworkMessage msg = std::move(firstMsg);
+
+    // 检查是否为 BACKUP_START（自定义备份名）
+    std::string customName;
+    if (msg.type == static_cast<uint16_t>(MessageType::BACKUP_START)) {
+        if (msg.payload.size() >= 2) {
+            size_t off = 0;
+            customName = readStringBE(msg.payload.data(), off);
+        }
+
+        // 名称唯一性检查
+        if (!customName.empty()) {
+            std::string existingId = storage_.findBackupByName(currentUser_, customName);
+            if (!existingId.empty()) {
+                log.info("[Session] Backup name '" + customName
+                         + "' already exists (ID: " + existingId + "), rejecting.");
+                sendError(ErrorCode::NAME_EXISTS,
+                          "Backup name '" + customName + "' already exists. "
+                          "Please use a different name.");
+                return true;
+            }
+            log.info("[Session] Backup name: " + customName);
+        }
+
+        // 等待第一条 FILE_DATA
+        msg = receiveEncrypted();
+        if (msg.type == 0) return false;
+    }
+
+    // 自动生成备份 ID
+    backupId = storage_.createBackup(currentUser_);
+
     bool first = true;
 
     while (true) {
@@ -310,6 +342,11 @@ bool ServerSession::handleBackup(NetworkMessage& firstMsg) {
         MetadataSerializer serializer;
         auto files = serializer.deserialize(metadataBytes);
         storage_.saveMetadata(currentUser_, backupId, files);
+    }
+
+    // 保存备份名称
+    if (!customName.empty()) {
+        storage_.saveBackupName(currentUser_, backupId, customName);
     }
 
     log.info("[Session] Backup " + backupId + " saved for user " + currentUser_
@@ -419,6 +456,9 @@ bool ServerSession::handleListBackups() {
 
     for (const auto& id : backups) {
         writeStringBE(payload, id);
+        // 包含备份名称（用户设置的可读名称）
+        std::string name = storage_.getBackupName(currentUser_, id);
+        writeStringBE(payload, name);
         time_t ts = storage_.getBackupTimestamp(currentUser_, id);
         writeUint64BE(payload, static_cast<uint64_t>(ts));
     }

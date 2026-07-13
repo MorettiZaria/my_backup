@@ -18,6 +18,9 @@ public:
                         const std::string& username,
                         const std::string& password);
 
+    /// 设置自定义备份名称（空字符串=自动生成）
+    void setBackupName(const std::string& name);
+
     /// 执行远程备份
     /// @param packStrategy 打包策略（必须）
     /// @param compressStrategy 压缩策略（nullptr=不压缩）
@@ -34,6 +37,7 @@ private:
     uint16_t port_;
     std::string username_;
     std::string password_;
+    std::string backupName_;
     NetworkSocket socket_;
     TransportEncryptor encryptor_;
     uint64_t sendSeq_ = 0;

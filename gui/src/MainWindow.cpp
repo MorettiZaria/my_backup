@@ -16,12 +16,12 @@ MainWindow::MainWindow(QWidget* parent)
     resize(680, 580);
 
     tabWidget_ = new QTabWidget;
-    tabWidget_->addTab(new LocalBackupTab,    "📦 本地备份");
-    tabWidget_->addTab(new LocalRestoreTab,   "📂 本地还原");
-    tabWidget_->addTab(new RemoteBackupTab,   "☁ 远程备份");
-    tabWidget_->addTab(new RemoteRestoreTab,  "📥 远程还原");
-    tabWidget_->addTab(new RemoteListTab,     "📋 远程列表");
-    tabWidget_->addTab(new UserManagementTab, "👤 用户管理");
+    tabWidget_->addTab(new LocalBackupTab,    "本地备份");
+    tabWidget_->addTab(new LocalRestoreTab,   "本地还原");
+    tabWidget_->addTab(new RemoteBackupTab,   "远程备份");
+    tabWidget_->addTab(new RemoteRestoreTab,  "远程还原");
+    tabWidget_->addTab(new RemoteListTab,     "远程列表");
+    tabWidget_->addTab(new UserManagementTab, "用户管理");
 
     setCentralWidget(tabWidget_);
 

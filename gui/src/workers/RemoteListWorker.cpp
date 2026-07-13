@@ -120,8 +120,10 @@ void RemoteListWorker::run() {
 
     for (uint32_t i = 0; i < count; ++i) {
         std::string id = readStringBE(resp.payload.data(), off);
+        std::string name = readStringBE(resp.payload.data(), off);
         uint64_t ts = readUint64BE(resp.payload.data(), off);
-        entries.append({QString::fromStdString(id), ts});
+        entries.append({QString::fromStdString(id),
+                        QString::fromStdString(name), ts});
     }
 
     emit finished(true,

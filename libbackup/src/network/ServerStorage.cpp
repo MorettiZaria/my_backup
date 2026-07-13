@@ -8,6 +8,7 @@
 #include <dirent.h>
 #include <unistd.h>
 #include <algorithm>
+#include <cctype>
 
 ServerStorage::ServerStorage(const std::string& basePath) : basePath_(basePath) {
     ensureDir(basePath_);
@@ -62,6 +63,41 @@ std::string ServerStorage::createBackup(const std::string& username) {
     std::string backupId = oss.str();
     ensureDir(backupDir(username, backupId));
     return backupId;
+}
+
+// ===== 备份名称管理 =====
+
+bool ServerStorage::saveBackupName(const std::string& username,
+                                    const std::string& backupId,
+                                    const std::string& name) {
+    std::string path = backupDir(username, backupId) + "/.name";
+    std::ofstream out(path, std::ios::binary | std::ios::trunc);
+    if (!out) return false;
+    out.write(name.data(), static_cast<std::streamsize>(name.size()));
+    return out.good();
+}
+
+std::string ServerStorage::getBackupName(const std::string& username,
+                                          const std::string& backupId) {
+    std::string path = backupDir(username, backupId) + "/.name";
+    std::ifstream in(path, std::ios::binary | std::ios::ate);
+    if (!in) return "";
+    size_t size = static_cast<size_t>(in.tellg());
+    in.seekg(0);
+    std::string name(size, '\0');
+    in.read(&name[0], static_cast<std::streamsize>(size));
+    return name;
+}
+
+std::string ServerStorage::findBackupByName(const std::string& username,
+                                             const std::string& name) {
+    auto backups = listBackups(username);
+    for (const auto& id : backups) {
+        if (getBackupName(username, id) == name) {
+            return id;
+        }
+    }
+    return "";
 }
 
 // ===== 保存 =====
