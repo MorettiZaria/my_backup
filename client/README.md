@@ -42,6 +42,7 @@ backup user login    --server <host:port> --username <用户名> --password <密
 | `--pack` | `tar` / `index` | 打包算法（默认 `tar`） |
 | `--compress` | `rle` / `huffman` | 压缩算法 |
 | `--encrypt` | `xor` / `vigenere` | 加密算法 |
+| `--backup-name` | 字符串 | 自定义备份名称（留空则自动生成 ID） |
 | `--backup-id` | 字符串 | 还原指定备份 ID（默认 = 最新） |
 
 ## 使用示例
@@ -74,9 +75,14 @@ backup-server --port 8848 --storage ./server_data
 # 注册用户
 backup user register --server 127.0.0.1:8848 --username zaria --password mypass
 
-# 远程备份
+# 远程备份（自动生成 ID）
 backup remote-backup /home/user/documents \
     --server 192.168.1.100:8848 --username zaria --password mypass --pack tar
+
+# 远程备份（自定义备份名称）
+backup remote-backup /home/user/documents \
+    --server 192.168.1.100:8848 --username zaria --password mypass \
+    --backup-name "文档备份_202407" --pack tar
 
 # 远程还原
 backup remote-restore /home/user/restored \
