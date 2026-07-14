@@ -201,14 +201,14 @@ bool RestoreEngine::run(const std::string& inputFile,
     // 7c. 创建特殊文件（管道、设备）
     for (const auto& info : files) {
         std::string fullPath = destDir + "/" + info.relativePath;
-        if (info.fileType == S_IFIFO) {
+        if (info.isFifo()) {
             size_t lastSlash = fullPath.rfind('/');
             if (lastSlash != std::string::npos) mkdirRecursive(fullPath.substr(0, lastSlash));
             unlink(fullPath.c_str());
             if (mkfifo(fullPath.c_str(), info.permissions) != 0) {
                 warnSyscall("mkfifo", fullPath);
             }
-        } else if (info.fileType == S_IFBLK || info.fileType == S_IFCHR) {
+        } else if (info.isDevice()) {
             size_t lastSlash = fullPath.rfind('/');
             if (lastSlash != std::string::npos) mkdirRecursive(fullPath.substr(0, lastSlash));
             unlink(fullPath.c_str());

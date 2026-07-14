@@ -43,6 +43,16 @@ public:
     bool isDirectory() const;
     /// 是否为符号链接
     bool isSymlink() const;
+    /// 是否为命名管道（FIFO）
+    bool isFifo() const;
+    /// 是否为块设备
+    bool isBlockDevice() const;
+    /// 是否为字符设备
+    bool isCharDevice() const;
+    /// 是否为 Unix 域套接字
+    bool isSocket() const;
+    /// 是否为设备文件（块设备或字符设备）
+    bool isDevice() const;
 };
 
 #endif // BACKUP_FILEINFO_H

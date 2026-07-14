@@ -11,7 +11,7 @@ void FileInfo::fromStat(const struct stat& st, const std::string& relPath) {
     permissions  = st.st_mode & ~S_IFMT;
     owner        = st.st_uid;
     group        = st.st_gid;
-    fileSize     = (fileType == S_IFREG) ? st.st_size : 0;
+    fileSize     = (isRegular()) ? st.st_size : 0;
 #ifdef __APPLE__
     atime        = st.st_atimespec.tv_sec;
     mtime        = st.st_mtimespec.tv_sec;
@@ -25,9 +25,14 @@ void FileInfo::fromStat(const struct stat& st, const std::string& relPath) {
     symlinkTarget.clear();
 }
 
-bool FileInfo::isRegular() const   { return fileType == S_IFREG; }
-bool FileInfo::isDirectory() const { return fileType == S_IFDIR; }
-bool FileInfo::isSymlink() const   { return fileType == S_IFLNK; }
+bool FileInfo::isRegular() const     { return fileType == S_IFREG; }
+bool FileInfo::isDirectory() const  { return fileType == S_IFDIR; }
+bool FileInfo::isSymlink() const    { return fileType == S_IFLNK; }
+bool FileInfo::isFifo() const       { return fileType == S_IFIFO; }
+bool FileInfo::isBlockDevice() const { return fileType == S_IFBLK; }
+bool FileInfo::isCharDevice() const { return fileType == S_IFCHR; }
+bool FileInfo::isSocket() const     { return fileType == S_IFSOCK; }
+bool FileInfo::isDevice() const     { return isBlockDevice() || isCharDevice(); }
 
 // ===== 序列化格式 =====
 // [pathLen:2B][path:N B]
@@ -108,7 +113,7 @@ std::vector<uint8_t> FileInfo::serialize() const {
     writeString(buf, symlinkTarget);
 
     // 设备号（仅设备文件）
-    if (fileType == S_IFBLK || fileType == S_IFCHR) {
+    if (isDevice()) {
         writeUint64(buf, static_cast<uint64_t>(deviceId));
     }
 
@@ -129,7 +134,7 @@ FileInfo FileInfo::deserialize(const uint8_t* data, size_t& offset) {
     info.ctime        = static_cast<time_t>(readUint64(data, offset));
     info.symlinkTarget = readString(data, offset);
 
-    if (info.fileType == S_IFBLK || info.fileType == S_IFCHR) {
+    if (info.isDevice()) {
         info.deviceId = static_cast<dev_t>(readUint64(data, offset));
     }
 
