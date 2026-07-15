@@ -51,3 +51,7 @@ doc/
 
 # Claude Code 项目指南（不上传）
 CLAUDE.md
+
+.codebuddy/
+
+secret/

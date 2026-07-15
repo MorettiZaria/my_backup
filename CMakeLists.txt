@@ -38,6 +38,22 @@ else()
 endif()
 
 # ============================================================
+# GTest 单元测试（可选）
+# ============================================================
+option(BUILD_TESTS "Build unit tests with GTest" ON)
+if(BUILD_TESTS)
+    include(FetchContent)
+    FetchContent_Declare(
+        googletest
+        GIT_REPOSITORY https://github.com/google/googletest.git
+        GIT_TAG        v1.15.2
+    )
+    FetchContent_MakeAvailable(googletest)
+    enable_testing()
+    add_subdirectory(tests/gtest)
+endif()
+
+# ============================================================
 # 安装规则
 # ============================================================
 include(GNUInstallDirs)

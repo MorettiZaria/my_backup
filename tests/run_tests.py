@@ -54,12 +54,13 @@ def define_cases():
         })
 
     # ===================== 0. 编译构建 =====================
+    # macOS 兼容：使用 sysctl 获取 CPU 核数
     add("BUILD-01", "编译构建", "CMake 项目编译",
         "重要", "功能测试",
         "验证项目能通过 CMake 成功编译",
         "CMake 3.16+, GCC 8+",
         "mkdir -p build && cd build && cmake .. && make",
-        f"cd {PROJECT_ROOT} && mkdir -p build && cd build && cmake .. -DCMAKE_BUILD_TYPE=Release 2>&1 | tail -1 && make -j$(nproc) 2>&1 | tail -1",
+        f"cd {PROJECT_ROOT} && mkdir -p build && cd build && cmake .. -DCMAKE_BUILD_TYPE=Release 2>&1 | tail -1 && make -j$(sysctl -n hw.ncpu 2>/dev/null || nproc 2>/dev/null || echo 4) 2>&1 | tail -1",
         "Built target backup",
         verify=f"test -f {BINARY} && echo 'binary exists'" if True else "")
 
@@ -244,7 +245,7 @@ for i in $(seq 1 100); do echo "line_${{i}}_repeated_data_abcdefghij" >> {TMP_DI
         f"{BINARY} backup {TMP_DIR}/srctext {TMP_DIR}/restore/perm.bak --pack tar && "
         f"{BINARY} restore {TMP_DIR}/restore/perm.bak {TMP_DIR}/restore/perm_out",
         "Restore complete!",
-        verify=f"stat -f '%p' {TMP_DIR}/restore/perm_out/srctext/a.txt 2>/dev/null | grep -q 8180 && echo OK || stat -c '%a' {TMP_DIR}/restore/perm_out/srctext/a.txt 2>/dev/null | grep -q 600 && echo OK || echo 'perm check skipped'")
+        verify=f"(ls -l {TMP_DIR}/restore/perm_out/srctext/a.txt 2>/dev/null | grep -q '^-rw-------' && echo OK) || echo 'perm check skipped'")
 
     # 中文内容
     add("FUNC-18", "单机/中文内容", "中文UTF-8文件备份还原",
@@ -318,15 +319,17 @@ for i in $(seq 1 100); do echo "line_${{i}}_repeated_data_abcdefghij" >> {TMP_DI
 
     # ===================== 9. 网络模式功能测试 =====================
     def net_start():
-        # 先释放端口（清理残留），再用 $! 捕获服务器 PID
-        # 用 nc -z 轮询端口最多 10 秒，确认服务器已就绪
-        return (f"fuser -k {NET}/tcp 2>/dev/null; sleep 0.5; "
-                f"# wait until port is truly free\n"
-                f"while nc -z 127.0.0.1 {NET} 2>/dev/null; do sleep 0.3; done; "
+        # macOS/Linux 兼容：释放端口（清理残留），再用 $! 捕获服务器 PID
+        # 端口检查优先用 bash 内建 /dev/tcp，其次用 nc -z（两者都兼容 macOS/Linux）
+        return (f"(lsof -ti:{NET} 2>/dev/null | xargs kill -9 2>/dev/null) 2>/dev/null; true; sleep 0.5; "
                 f"rm -rf {TMP_DIR}/server_data 2>/dev/null; "
                 f"{BINARY} server start --port {NET} --storage {TMP_DIR}/server_data > /dev/null 2>&1 & "
                 f"SERVPID=$!; "
-                f"for i in $(seq 1 20); do nc -z 127.0.0.1 {NET} 2>/dev/null && break; sleep 0.5; done; ")
+                f"for i in $(seq 1 20); do "
+                f"  (echo >/dev/tcp/127.0.0.1/{NET}) 2>/dev/null && break; "
+                f"  nc -z 127.0.0.1 {NET} 2>/dev/null && break; "
+                f"  sleep 0.5; "
+                f"done; ")
 
     add("NET-01", "网络/用户注册", "用户注册",
         "重要", "功能测试",
@@ -441,8 +444,8 @@ for i in $(seq 1 100); do echo "line_${{i}}_repeated_data_abcdefghij" >> {TMP_DI
         "验证RLE对重复数据有明显压缩效果",
         "已有RLE压缩备份",
         f"check RLE compressed file size",
-        f"SRC=$(du -sb {TMP_DIR}/srclarge 2>/dev/null | cut -f1 || echo 0); "
-        f"DST=$(stat -f%z {TMP_DIR}/restore/large_rle.bak 2>/dev/null || stat -c%s {TMP_DIR}/restore/large_rle.bak 2>/dev/null || echo 0); "
+        f"SRC=$(wc -c < {TMP_DIR}/srclarge/big.txt 2>/dev/null || echo 0); "
+        f"DST=$(wc -c < {TMP_DIR}/restore/large_rle.bak 2>/dev/null || stat -f%z {TMP_DIR}/restore/large_rle.bak 2>/dev/null || stat -c%s {TMP_DIR}/restore/large_rle.bak 2>/dev/null || echo 0); "
         f"echo \"src=$SRC dst=$DST\"",
         "src=")
 
@@ -451,7 +454,7 @@ for i in $(seq 1 100); do echo "line_${{i}}_repeated_data_abcdefghij" >> {TMP_DI
         "验证Huffman对重复数据有明显压缩效果",
         "已有Huffman压缩备份",
         f"check Huffman compressed file size",
-        f"DST=$(stat -f%z {TMP_DIR}/restore/large_huff.bak 2>/dev/null || stat -c%s {TMP_DIR}/restore/large_huff.bak 2>/dev/null || echo 0); "
+        f"DST=$(wc -c < {TMP_DIR}/restore/large_huff.bak 2>/dev/null || stat -f%z {TMP_DIR}/restore/large_huff.bak 2>/dev/null || stat -c%s {TMP_DIR}/restore/large_huff.bak 2>/dev/null || echo 0); "
         f"echo \"huffman_size=$DST\"",
         "huffman_size=")
 
@@ -644,14 +647,14 @@ def main():
     log(f"  备份软件自动化测试工具 v1.0", C.BD)
     log(f"{'='*60}\n", C.B)
 
-    # 清理残留服务器进程（使用 fuser 而非 pkill，更精确）
-    __import__('subprocess').run("fuser -k 18849/tcp 2>/dev/null", shell=True)
+    # 清理残留服务器进程（macOS/Linux 兼容）
+    __import__('subprocess').run("(lsof -ti:18849 2>/dev/null | xargs kill -9 2>/dev/null) 2>/dev/null; true", shell=True)
 
     cases = define_cases()
     total, passed, failed, errors = run_tests(cases)
 
     # 清理
-    __import__('subprocess').run("fuser -k 18849/tcp 2>/dev/null", shell=True)
+    __import__('subprocess').run("(lsof -ti:18849 2>/dev/null | xargs kill -9 2>/dev/null) 2>/dev/null; true", shell=True)
 
     # 生成报告
     log(f"\n{'='*60}", C.B)
