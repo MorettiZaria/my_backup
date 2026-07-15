@@ -6,6 +6,14 @@ set(GTEST_SOURCES
     test_huffman.cpp
     test_encrypt.cpp
     test_metadata.cpp
+    test_managers.cpp
+    test_pack.cpp
+    test_backup_restore.cpp
+    test_network_nosocket.cpp
+    test_filescanner.cpp
+    test_metadata_store.cpp
+    test_network_loopback.cpp
+    test_server_session.cpp
 )
 
 add_executable(backup_gtest ${GTEST_SOURCES})

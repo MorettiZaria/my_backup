@@ -1,6 +1,66 @@
 # 测试指南
 
-## 自动化测试（推荐）
+## 单元测试（GTest，推荐优先运行）
+
+基于 GoogleTest v1.15.2 的白盒单元测试，覆盖 `libbackup/src` 全部 26 个生产源码文件，共 **199 个用例**。
+
+### 编译和运行
+
+```bash
+# 在项目根目录执行
+mkdir -p build && cd build
+cmake .. -DBUILD_TESTS=ON -DCMAKE_BUILD_TYPE=Release
+make backup_gtest -j$(sysctl -n hw.ncpu 2>/dev/null || nproc)
+
+# 运行全部单元测试
+./tests/gtest/backup_gtest
+
+# 运行特定套件
+./tests/gtest/backup_gtest --gtest_filter='RleTest.*'
+./tests/gtest/backup_gtest --gtest_filter='ServerSessionIntegrationTest.*'
+
+# 通过 CTest 运行
+ctest --output-on-failure
+```
+
+### 测试文件清单
+
+| 文件 | 覆盖模块 | 用例数 |
+|---|---|---|
+| `gtest/test_rle.cpp` | RLE 压缩算法 | 9 |
+| `gtest/test_huffman.cpp` | Huffman 压缩算法 | 10 |
+| `gtest/test_encrypt.cpp` | XOR + Vigenere 加密算法 | 16 |
+| `gtest/test_metadata.cpp` | MetadataSerializer + FileInfo | 16 |
+| `gtest/test_managers.cpp` | CompressManager / EncryptManager / PackManager | 12 |
+| `gtest/test_pack.cpp` | TarPackStrategy / IndexPackStrategy | 22 |
+| `gtest/test_backup_restore.cpp` | BackupEngine / RestoreEngine | 14 |
+| `gtest/test_network_nosocket.cpp` | NetworkProtocol / ServerConfig / UserManager / 等 | 35 |
+| `gtest/test_filescanner.cpp` | FileScanner | 9 |
+| `gtest/test_metadata_store.cpp` | MetadataStore | 7 |
+| `gtest/test_network_loopback.cpp` | NetworkSocket 本地回环 | 14 |
+| `gtest/test_server_session.cpp` | ServerSession 集成测试 | 11 |
+
+### 代码覆盖率统计
+
+```bash
+# 覆盖率构建（macOS Apple Clang / Linux Clang）
+mkdir -p build_coverage && cd build_coverage
+cmake .. -DCMAKE_BUILD_TYPE=Debug -DBUILD_TESTS=ON \
+    -DCMAKE_CXX_FLAGS='-fprofile-instr-generate -fcoverage-mapping -O0' \
+    -DCMAKE_EXE_LINKER_FLAGS='-fprofile-instr-generate'
+make backup_gtest -j$(sysctl -n hw.ncpu 2>/dev/null || nproc)
+
+LLVM_PROFILE_FILE=coverage.profraw ./tests/gtest/backup_gtest
+xcrun llvm-profdata merge -sparse coverage.profraw -o coverage.profdata
+xcrun llvm-cov report ./tests/gtest/backup_gtest -instr-profile=coverage.profdata \
+    -ignore-filename-regex='(^|/)include/' -ignore-filename-regex='_deps'
+```
+
+> 当前覆盖率：**75.15%**（排除需集成测试环境的 3 个网络模块后 **92.70%**），详见 `doc/软件测试报告.md`。
+
+---
+
+## 集成测试（Python 自动化）
 
 ```bash
 # 在项目根目录执行
