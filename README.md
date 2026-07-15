@@ -88,10 +88,6 @@ my_backup/
 - **认证**: salt + SHA-256 哈希密码存储
 - **传输加密**: XOR LCG 流密码，每消息独立 IV
 
-## 部署到云服务器
-
-详见 [doc/ECS_DEPLOY.md](doc/ECS_DEPLOY.md)。
-
 ## License
 
 MIT License — 详见 [LICENSE](LICENSE)
