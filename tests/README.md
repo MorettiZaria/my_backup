@@ -64,10 +64,10 @@ xcrun llvm-cov report ./tests/gtest/backup_gtest -instr-profile=coverage.profdat
 
 ```bash
 # 在项目根目录执行
-python3 tests/run_tests.py
+python3 tests/integration/run_tests.py
 ```
 
-脚本会自动完成编译（如未编译）、运行全部测试用例（单机 + 网络），并生成 `tests/test_report.md` 测试报告。
+脚本会自动完成编译（如未编译）、运行全部测试用例（单机 + 网络），并生成 `tests/integration/integration_report.md` 测试报告。
 
 测试覆盖：
 - 单机模式：tar/index 打包、RLE/Huffman 压缩、XOR/Vigenere 加密、全功能组合
@@ -79,7 +79,7 @@ python3 tests/run_tests.py
 
 ### 测试数据
 
-`testdata/` 目录是一个模拟真实场景的目录树，用作备份的**源目录**。
+`integration/testdata/` 目录是一个模拟真实场景的目录树，用作备份的**源目录**。
 
 ### 包含的文件类型
 
@@ -121,60 +121,60 @@ mkdir -p build && cd build && cmake .. && make -j$(nproc) && cd ..
 ### 2. 测试打包（tar）
 
 ```bash
-./build/client/backup backup tests/testdata tests/output_tar.bak --pack tar
+./build/client/backup backup tests/integration/testdata tests/output_tar.bak --pack tar
 ./build/client/backup restore tests/output_tar.bak tests/restored_tar
-diff -r tests/testdata tests/restored_tar
+diff -r tests/integration/testdata tests/restored_tar
 ```
 
 ### 3. 测试打包（index）
 
 ```bash
-./build/client/backup backup tests/testdata tests/output_idx.bak --pack index
+./build/client/backup backup tests/integration/testdata tests/output_idx.bak --pack index
 ./build/client/backup restore tests/output_idx.bak tests/restored_idx
-diff -r tests/testdata tests/restored_idx
+diff -r tests/integration/testdata tests/restored_idx
 ```
 
 ### 4. 测试打包 + 压缩（RLE）
 
 ```bash
-./build/client/backup backup tests/testdata tests/output_rle.bak --pack tar --compress rle
+./build/client/backup backup tests/integration/testdata tests/output_rle.bak --pack tar --compress rle
 # 观察：big_repeat.txt 有 50KB 重复数据，RLE 压缩效果应该很明显
 ls -lh tests/output_tar.bak tests/output_rle.bak
 ./build/client/backup restore tests/output_rle.bak tests/restored_rle
-diff -r tests/testdata tests/restored_rle
+diff -r tests/integration/testdata tests/restored_rle
 ```
 
 ### 5. 测试打包 + 压缩（Huffman）
 
 ```bash
-./build/client/backup backup tests/testdata tests/output_huff.bak --pack tar --compress huffman
+./build/client/backup backup tests/integration/testdata tests/output_huff.bak --pack tar --compress huffman
 ls -lh tests/output_tar.bak tests/output_huff.bak
 ./build/client/backup restore tests/output_huff.bak tests/restored_huff
-diff -r tests/testdata tests/restored_huff
+diff -r tests/integration/testdata tests/restored_huff
 ```
 
 ### 6. 测试加密（XOR）
 
 ```bash
-./build/client/backup backup tests/testdata tests/output_xor.bak --pack tar --encrypt xor --password mypass
+./build/client/backup backup tests/integration/testdata tests/output_xor.bak --pack tar --encrypt xor --password mypass
 # 查看加密后的文件是否无法直接读懂
 xxd tests/output_xor.bak | head -5
 ./build/client/backup restore tests/output_xor.bak tests/restored_xor --password mypass
-diff -r tests/testdata tests/restored_xor
+diff -r tests/integration/testdata tests/restored_xor
 ```
 
 ### 7. 测试加密（Vigenere）
 
 ```bash
-./build/client/backup backup tests/testdata tests/output_vig.bak --pack tar --encrypt vigenere --password mypass
+./build/client/backup backup tests/integration/testdata tests/output_vig.bak --pack tar --encrypt vigenere --password mypass
 ./build/client/backup restore tests/output_vig.bak tests/restored_vig --password mypass
-diff -r tests/testdata tests/restored_vig
+diff -r tests/integration/testdata tests/restored_vig
 ```
 
 ### 8. 全功能组合
 
 ```bash
-./build/client/backup backup tests/testdata tests/output_full.bak \
+./build/client/backup backup tests/integration/testdata tests/output_full.bak \
     --pack index --compress huffman --encrypt xor --password s3cret
 
 ls -lh tests/output_full.bak
@@ -183,7 +183,7 @@ ls -lh tests/output_full.bak
 ./build/client/backup restore tests/output_full.bak tests/restored_full --password s3cret
 
 # 逐文件比对
-diff -r tests/testdata tests/restored_full
+diff -r tests/integration/testdata tests/restored_full
 ```
 
 ### 9. 验证符号链接
@@ -260,7 +260,7 @@ kill -0 $SERVER_PID && echo "Server is running" || echo "Server failed to start"
 
 ```bash
 # 远程备份（打包 = tar）
-./build/client/backup remote-backup tests/testdata \
+./build/client/backup remote-backup tests/integration/testdata \
     --server 127.0.0.1:18848 \
     --username testuser --password testpass \
     --pack tar
@@ -280,7 +280,7 @@ ls -la /tmp/test_server_data/testuser/backup_000001/
     --username testuser --password testpass
 
 # 数据完整性验证
-diff -r tests/testdata /tmp/test_restore_remote
+diff -r tests/integration/testdata /tmp/test_restore_remote
 # 预期: 无差异（特殊文件如 FIFO 会提示类型差异，属于 diff 工具的正常行为）
 
 # 验证普通文件内容
@@ -313,7 +313,7 @@ stat -c '%a' /tmp/test_restore_remote/data.txt
 
 ```bash
 # 全功能远程备份
-./build/client/backup remote-backup tests/testdata \
+./build/client/backup remote-backup tests/integration/testdata \
     --server 127.0.0.1:18848 \
     --username testuser --password testpass \
     --pack index --compress huffman \
@@ -329,7 +329,7 @@ xxd /tmp/test_server_data/testuser/backup_000002/payload.bin | head -3
     --username testuser --password testpass \
     --file-password filepass
     
-diff -r tests/testdata /tmp/test_restore_enc
+diff -r tests/integration/testdata /tmp/test_restore_enc
 # 预期: 无差异
 
 # 错误文件密码还原（数据应损坏）
@@ -345,7 +345,7 @@ cat /tmp/test_restore_bad/hello.txt
 
 ```bash
 # 连接不存在用户（用户未注册就直接备份）
-./build/client/backup remote-backup tests/testdata \
+./build/client/backup remote-backup tests/integration/testdata \
     --server 127.0.0.1:18848 \
     --username nonexist --password testpass \
     --pack tar

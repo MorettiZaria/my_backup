@@ -2,8 +2,8 @@
 """
 my_backup 自动化测试脚本
 
-Usage: python3 tests/run_tests.py
-Output: terminal progress + tests/test_report.md
+Usage: python3 tests/integration/run_tests.py
+Output: terminal progress + tests/integration/integration_report.md
 """
 
 import subprocess
@@ -14,12 +14,12 @@ from datetime import datetime
 from pathlib import Path
 
 # ============ 配置 ============
-PROJECT_ROOT = Path(__file__).resolve().parent.parent
+PROJECT_ROOT = Path(__file__).resolve().parent.parent.parent
 BUILD_DIR = PROJECT_ROOT / "build"
 BINARY = str(BUILD_DIR / "client" / "backup")
 SERVER_BINARY = str(BUILD_DIR / "server" / "backup-server")
 TMP_DIR = f"/tmp/backup_test_{datetime.now().strftime('%Y%m%d_%H%M%S')}"
-REPORT_FILE = str(PROJECT_ROOT / "tests" / "test_report.md")
+REPORT_FILE = str(PROJECT_ROOT / "tests" / "integration" / "integration_report.md")
 
 # ============ 颜色 ============
 class C:
@@ -61,7 +61,7 @@ def define_cases():
         "CMake 3.16+, GCC 8+",
         "mkdir -p build && cd build && cmake .. && make",
         f"cd {PROJECT_ROOT} && mkdir -p build && cd build && cmake .. -DCMAKE_BUILD_TYPE=Release 2>&1 | tail -1 && make -j$(sysctl -n hw.ncpu 2>/dev/null || nproc 2>/dev/null || echo 4) 2>&1 | tail -1",
-        "Built target backup",
+        "Built target",
         verify=f"test -f {BINARY} && echo 'binary exists'" if True else "")
 
     # ===================== 1. 环境准备 =====================
@@ -530,7 +530,7 @@ def gen_report(cases, total, passed, failed, errors):
 > **课程**：软件开发综合实验  
 > **项目**：文件备份软件  
 > **测试日期**：{now}  
-> **测试工具**：Python 自动化测试脚本 (`tests/run_tests.py`)  
+> **测试工具**：Python 自动化测试脚本 (`tests/integration/run_tests.py`)
 
 ---
 
@@ -637,7 +637,7 @@ def gen_report(cases, total, passed, failed, errors):
     else:
         r += "所有测试用例均已通过，软件质量良好。\n"
 
-    r += f"\n---\n*本报告由 `tests/run_tests.py` 自动生成于 {now}*\n"
+    r += f"\n---\n*本报告由 `tests/integration/run_tests.py` 自动生成于 {now}*\n"
     return r
 
 

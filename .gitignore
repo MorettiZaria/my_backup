@@ -25,7 +25,7 @@ Thumbs.db
 # ==================================
 tests/output_*.bak
 tests/restored_*/
-tests/test_report.md
+tests/integration/integration_report.md
 /tmp/
 
 # ==================================
