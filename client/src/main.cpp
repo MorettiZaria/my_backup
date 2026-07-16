@@ -1,6 +1,7 @@
 #include "core/BackupEngine.h"
 #include "core/RestoreEngine.h"
 #include "core/StrategyFactory.h"
+#include "filter/FilterParser.h"
 
 // 网络模块
 #include "network/BackupServer.h"
@@ -41,8 +42,29 @@ Options:
   --username <name>         Username (remote mode)
   --help                    Show this help
 
+File filter options (can appear multiple times; same-dimension = OR, cross-dimension = AND, exclude wins):
+  --filter-include-path <glob>     Include files matching path glob (e.g. 'docs/**')
+  --filter-exclude-path <glob>     Exclude files matching path glob (e.g. '/tmp/**')
+  --filter-include-name <glob>     Include files matching name glob (e.g. '*.cpp')
+  --filter-exclude-name <glob>     Exclude files matching name glob (e.g. '*.tmp')
+  --filter-include-type <code>     Include only file type f/d/l/p/b/c/s
+  --filter-exclude-type <code>     Exclude file type
+  --filter-include-mtime <spec>    Include by mtime: after:YYYY-MM-DD / before:... / between:D1,D2
+  --filter-exclude-mtime <spec>    Exclude by mtime
+  --filter-include-atime <spec>    Include by atime
+  --filter-exclude-atime <spec>    Exclude by atime
+  --filter-include-ctime <spec>    Include by ctime
+  --filter-exclude-ctime <spec>    Exclude by ctime
+  --filter-include-size <spec>     Include by size: +1M / -500K / =1024 / 100:1000
+  --filter-exclude-size <spec>     Exclude by size
+  --filter-include-owner <id|name> Include only files owned by uid or username
+  --filter-exclude-owner <id|name> Exclude files owned by uid or username
+  --filter-include-group <id|name> Include only files with gid or group name
+  --filter-exclude-group <id|name> Exclude files with gid or group name
+
 Examples:
   backup backup /home/user/data ./mybackup.bak --pack tar
+  backup backup ./src ./src.bak --filter-include-name '*.cpp' --filter-exclude-size '+10M'
   backup restore ./mybackup.bak /home/user/restored --password secret
   backup server start --port 8848 --storage ./server_data
   backup remote-backup /home/user/data --server 127.0.0.1:8848 --username zaria --password mypass --pack tar
@@ -249,6 +271,9 @@ int main(int argc, char* argv[]) {
         std::string packName = "tar", compressName, encryptName, filePassword;
         std::string backupName;
 
+        FilterParser filterParser;
+        CompositeFilter compositeFilter;
+
         int i = 2;
         if (i < argc && argv[i][0] != '-') sourceDir = argv[i++];
         while (i < argc) {
@@ -261,6 +286,11 @@ int main(int argc, char* argv[]) {
             else if (opt == "--encrypt" && i + 1 < argc) encryptName = argv[++i];
             else if (opt == "--file-password" && i + 1 < argc) filePassword = argv[++i];
             else if (opt == "--backup-name" && i + 1 < argc) backupName = argv[++i];
+            else if (opt.rfind("--filter-", 0) == 0 && i + 1 < argc) {
+                std::string key = opt.substr(9);
+                std::string val = argv[++i];
+                filterParser.parseOne(compositeFilter, key, val);
+            }
             ++i;
         }
 
@@ -311,6 +341,7 @@ int main(int argc, char* argv[]) {
         if (!backupName.empty()) {
             client.setBackupName(backupName);
         }
+        if (!compositeFilter.isEmpty()) client.setFileFilter(&compositeFilter);
         return client.run(sourceDir, pack, compress, encrypt, filePassword) ? 0 : 1;
     }
 
@@ -395,6 +426,9 @@ int main(int argc, char* argv[]) {
             destOrOutput = argv[argIdx++];
         }
 
+        FilterParser filterParser;
+        CompositeFilter compositeFilter;
+
         while (argIdx < argc) {
             std::string opt = argv[argIdx];
             if (opt == "--pack" && argIdx + 1 < argc) {
@@ -408,6 +442,10 @@ int main(int argc, char* argv[]) {
             } else if (opt == "--help") {
                 printUsage();
                 return 0;
+            } else if (opt.rfind("--filter-", 0) == 0 && argIdx + 1 < argc) {
+                std::string key = opt.substr(9);  // remove "--filter-"
+                std::string val = argv[++argIdx];
+                filterParser.parseOne(compositeFilter, key, val);
             } else {
                 std::cerr << "Warning: unknown option '" << opt << "'" << std::endl;
             }
@@ -462,6 +500,7 @@ int main(int argc, char* argv[]) {
             engine.setPackStrategy(pack);
             engine.setCompressStrategy(compress);
             engine.setEncryptStrategy(encrypt);
+            if (!compositeFilter.isEmpty()) engine.setFileFilter(&compositeFilter);
 
             if (!engine.run(sourceOrInput, destOrOutput, password)) {
                 return 1;

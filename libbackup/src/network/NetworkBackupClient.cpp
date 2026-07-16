@@ -17,6 +17,10 @@ void NetworkBackupClient::setBackupName(const std::string& name) {
     backupName_ = name;
 }
 
+void NetworkBackupClient::setFileFilter(IFileFilter* filter) {
+    fileFilter_ = filter;
+}
+
 // ===== 收发 =====
 
 bool NetworkBackupClient::sendEncrypted(const NetworkMessage& msg) {
@@ -182,6 +186,7 @@ bool NetworkBackupClient::run(const std::string& sourceDir,
     // 5. 扫描源目录
     std::cout << "Scanning directory tree..." << std::endl;
     FileScanner scanner;
+    if (fileFilter_) scanner.setFilter(fileFilter_);
     auto files = scanner.scan(sourceDir);
     std::cout << "  Found " << files.size() << " entries." << std::endl;
 
@@ -191,6 +196,7 @@ bool NetworkBackupClient::run(const std::string& sourceDir,
     engine.setPackStrategy(packStrategy);
     engine.setCompressStrategy(compressStrategy);
     engine.setEncryptStrategy(encryptStrategy);
+    if (fileFilter_) engine.setFileFilter(fileFilter_);
 
     // 写入临时文件
     std::string tmpBakPath = "/tmp/remote_backup_" + username_ + ".bak";

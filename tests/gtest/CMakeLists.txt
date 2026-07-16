@@ -14,6 +14,7 @@ set(GTEST_SOURCES
     test_metadata_store.cpp
     test_network_loopback.cpp
     test_server_session.cpp
+    test_filter.cpp
 )
 
 add_executable(backup_gtest ${GTEST_SOURCES})

@@ -5,6 +5,7 @@
 #include "pack/IPackStrategy.h"
 #include "compress/ICompressStrategy.h"
 #include "encrypt/IEncryptStrategy.h"
+#include "filter/IFileFilter.h"
 #include <string>
 #include <vector>
 #include <cstdint>
@@ -29,6 +30,9 @@ public:
     void setCompressStrategy(ICompressStrategy* strategy);
     void setEncryptStrategy(IEncryptStrategy* strategy);
 
+    /// 设置文件筛选器（nullptr = 不筛选，备份所有文件）
+    void setFileFilter(IFileFilter* filter);
+
     /// 执行备份
     /// @param sourceDir  源目录路径
     /// @param outputFile 输出备份文件路径
@@ -42,6 +46,7 @@ private:
     IPackStrategy*      packStrategy_     = nullptr;
     ICompressStrategy*  compressStrategy_ = nullptr;
     IEncryptStrategy*   encryptStrategy_  = nullptr;
+    IFileFilter*        fileFilter_       = nullptr;
 
     /// 简单拼接文件内容（不打包时的回退方案）
     std::vector<uint8_t> concatFiles(const std::string& baseDir,

@@ -12,6 +12,7 @@ RemoteBackupWorker::RemoteBackupWorker(const QString& host,
                                          IEncryptStrategy* encrypt,
                                          const QString& filePassword,
                                          const QString& backupName,
+                                         const CompositeFilter& filter,
                                          QObject* parent)
     : QObject(parent)
     , host_(host)
@@ -23,7 +24,8 @@ RemoteBackupWorker::RemoteBackupWorker(const QString& host,
     , compress_(compress)
     , encrypt_(encrypt)
     , filePassword_(filePassword)
-    , backupName_(backupName) {}
+    , backupName_(backupName)
+    , filter_(filter) {}
 
 void RemoteBackupWorker::run() {
     emit started();
@@ -35,6 +37,7 @@ void RemoteBackupWorker::run() {
     if (!backupName_.isEmpty()) {
         client.setBackupName(backupName_.toStdString());
     }
+    if (!filter_.isEmpty()) client.setFileFilter(&filter_);
 
     bool ok = client.run(sourceDir_.toStdString(),
                          pack_, compress_, encrypt_,

@@ -12,6 +12,10 @@ std::vector<FileInfo> FileScanner::scan(const std::string& rootPath) {
     return result;
 }
 
+void FileScanner::setFilter(const IFileFilter* filter) {
+    filter_ = filter;
+}
+
 void FileScanner::scanRecursive(const std::string& rootPath,
                                 const std::string& currentRelPath,
                                 std::vector<FileInfo>& result) {
@@ -45,11 +49,29 @@ void FileScanner::scanRecursive(const std::string& rootPath,
             continue;
         }
 
-        FileInfo info = processEntry(entryFullPath, entryRelPath, st);
-        result.push_back(info);
+        // 筛选：在被筛选掉的文件上跳过 processEntry（避免读取内容）
+        // 目录即使被筛选器拒绝，仍需递归进入以查找匹配的子文件
+        bool isDir = S_ISDIR(st.st_mode);
+        bool filteredOut = false;
+        if (filter_ && !isDir) {
+            FileInfo prelim;
+            prelim.fromStat(st, entryRelPath);
+            if (!filter_->matches(prelim)) {
+                continue;
+            }
+        } else if (filter_ && isDir) {
+            FileInfo prelim;
+            prelim.fromStat(st, entryRelPath);
+            filteredOut = !filter_->matches(prelim);
+        }
 
-        // 如果是目录，递归进入
-        if (S_ISDIR(st.st_mode)) {
+        if (!filteredOut) {
+            FileInfo info = processEntry(entryFullPath, entryRelPath, st);
+            result.push_back(info);
+        }
+
+        // 如果是目录，始终递归（即使目录本身被筛掉，子文件可能命中）
+        if (isDir) {
             scanRecursive(rootPath, entryRelPath, result);
         }
     }

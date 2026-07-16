@@ -2,6 +2,7 @@
 #define BACKUP_FILESCANNER_H
 
 #include "FileInfo.h"
+#include "filter/IFileFilter.h"
 #include <string>
 #include <vector>
 #include <sys/stat.h>
@@ -15,7 +16,12 @@ public:
     /// 扫描目录，返回所有文件的信息列表（含普通文件的内容数据）
     std::vector<FileInfo> scan(const std::string& rootPath);
 
+    /// 设置文件筛选器（nullptr 或空 CompositeFilter = 不筛选）
+    void setFilter(const IFileFilter* filter);
+
 private:
+    const IFileFilter* filter_ = nullptr;
+
     /// 递归遍历
     void scanRecursive(const std::string& rootPath,
                        const std::string& currentRelPath,

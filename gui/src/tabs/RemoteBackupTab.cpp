@@ -1,5 +1,6 @@
 #include "tabs/RemoteBackupTab.h"
 #include "workers/RemoteBackupWorker.h"
+#include "widgets/FilterSetupWidget.h"
 
 #include <QFormLayout>
 #include <QVBoxLayout>
@@ -63,6 +64,10 @@ RemoteBackupTab::RemoteBackupTab(QWidget* parent)
     form->addRow("文件密码:", filePasswordEdit_);
 
     mainLayout->addLayout(form);
+
+    // ---- 文件筛选 ----
+    filterWidget_ = new FilterSetupWidget(this);
+    mainLayout->addWidget(filterWidget_);
 
     startBtn_ = new QPushButton("▶ 开始远程备份");
     startBtn_->setStyleSheet("QPushButton { font-size: 14px; padding: 8px 16px; }");
@@ -133,7 +138,8 @@ void RemoteBackupTab::onStartBackup() {
                                           static_cast<uint16_t>(portSpin_->value()),
                                           username, password, src,
                                           pack, compress, encrypt, filePassword,
-                                          backupNameEdit_->text().trimmed());
+                                          backupNameEdit_->text().trimmed(),
+                                          filterWidget_->buildFilter());
     worker->moveToThread(thread);
 
     connect(thread, &QThread::started, worker, &RemoteBackupWorker::run);
@@ -172,6 +178,7 @@ void RemoteBackupTab::setFormEnabled(bool enabled) {
     compressCombo_->setEnabled(enabled);
     encryptCombo_->setEnabled(enabled);
     filePasswordEdit_->setEnabled(enabled);
+    filterWidget_->setFormEnabled(enabled);
     startBtn_->setEnabled(enabled);
 }
 

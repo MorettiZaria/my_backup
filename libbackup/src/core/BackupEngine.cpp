@@ -19,6 +19,10 @@ void BackupEngine::setEncryptStrategy(IEncryptStrategy* strategy) {
     encryptStrategy_ = strategy;
 }
 
+void BackupEngine::setFileFilter(IFileFilter* filter) {
+    fileFilter_ = filter;
+}
+
 std::vector<uint8_t> BackupEngine::concatFiles(const std::string& /*baseDir*/,
                                                const std::vector<FileInfo>& files) {
     // 简单拼接：遍历所有普通文件，用分隔符隔开
@@ -65,6 +69,7 @@ bool BackupEngine::run(const std::string& sourceDir,
     // 1. 扫描源目录
     std::cout << "Scanning directory tree..." << std::endl;
     FileScanner scanner;
+    if (fileFilter_) scanner.setFilter(fileFilter_);
     std::vector<FileInfo> files = scanner.scan(sourceDir);
     std::cout << "  Found " << files.size() << " entries." << std::endl;
 

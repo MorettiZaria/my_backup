@@ -56,7 +56,7 @@ build/server/backup-server --port 8848 --storage ./server_data
 
 ## 命令行使用
 
-完整命令参考见 [client/README.md](client/README.md)。
+完整命令参考 [client/README.md](client/README.md)，包含所有选项及文件筛选用法。
 
 ## 项目结构
 
@@ -64,7 +64,7 @@ build/server/backup-server --port 8848 --storage ./server_data
 my_backup/
 ├── CMakeLists.txt          # 顶层构建（一键编译所有目标）
 ├── libbackup/              # 核心算法库（打包/压缩/加密/网络协议/用户管理）
-│   ├── include/            #   头文件：core/ pack/ compress/ encrypt/ metadata/ network/
+│   ├── include/            #   头文件：core/ pack/ compress/ encrypt/ metadata/ network/ filter/
 │   └── src/                #   对应 .cpp 实现
 ├── client/                 # CLI 客户端 (backup)
 │   └── src/main.cpp        #   所有命令行功能入口
@@ -83,6 +83,7 @@ my_backup/
 - **打包算法**: tar、index（自实现，零依赖）
 - **压缩算法**: RLE、Huffman（自实现）
 - **加密算法**: XOR、Vigenère（自实现）
+- **文件筛选**: 支持按路径/名称/类型/时间/尺寸/属主 6 维度筛选，白名单+黑名单，同维度 OR 跨维度 AND
 - **网络协议**: 自定义二进制协议，8 字节头部 + 可变载荷，大端序
 - **服务器并发**: `fork()` 每连接一个子进程
 - **认证**: salt + SHA-256 哈希密码存储

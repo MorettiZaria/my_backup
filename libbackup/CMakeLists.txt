@@ -22,6 +22,10 @@ add_library(libbackup STATIC
     # metadata
     src/metadata/MetadataSerializer.cpp
     src/metadata/MetadataStore.cpp
+    # filter
+    src/filter/FilterRule.cpp
+    src/filter/CompositeFilter.cpp
+    src/filter/FilterParser.cpp
     # network (shared protocol, socket, encryption, user auth)
     src/network/NetworkProtocol.cpp
     src/network/NetworkSocket.cpp

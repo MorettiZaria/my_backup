@@ -45,6 +45,57 @@ backup user login    --server <host:port> --username <用户名> --password <密
 | `--backup-name` | 字符串 | 自定义备份名称（留空则自动生成 ID） |
 | `--backup-id` | 字符串 | 还原指定备份 ID（默认 = 最新） |
 
+### 文件筛选
+
+备份时可按 6 种维度筛选文件，支持白名单（include）和黑名单（exclude）。同维度多条规则为 OR，不同维度为 AND，exclude 优先。
+
+筛选在扫描阶段即生效——被排除的文件不会读入内存。
+
+| 选项 | 说明 | 示例 |
+|---|---|---|
+| `--filter-include-path <glob>` | 路径匹配 | `'src/*'`, `'docs/*.md'` |
+| `--filter-exclude-path <glob>` | 排除路径 | `'/tmp/*'`, `'*/test/*'` |
+| `--filter-include-name <glob>` | 文件名 glob | `'*.cpp'`, `'report-??.pdf'` |
+| `--filter-exclude-name <glob>` | 排除文件名 | `'*.tmp'`, `'.*'` |
+| `--filter-include-type <c>` | 文件类型 f/d/l/p/b/c/s | `'f'` (普通文件), `'d'` (目录) |
+| `--filter-exclude-type <c>` | 排除类型 | `'l'` (排除符号链接) |
+| `--filter-include-mtime <s>` | 修改时间 `after:\|before:\|between:YYYY-MM-DD[,YYYY-MM-DD]` | `'after:2024-01-01'`, `'between:2024-01-01,2024-12-31'` |
+| `--filter-exclude-mtime <s>` | 排除修改时间范围 | `'before:2020-01-01'` |
+| `--filter-include-atime <s>` | 访问时间（格式同 mtime） | `'after:2024-06-01'` |
+| `--filter-exclude-atime <s>` | 排除访问时间范围 | |
+| `--filter-include-ctime <s>` | 状态变更时间 | |
+| `--filter-exclude-ctime <s>` | 排除状态变更时间范围 | |
+| `--filter-include-size <s>` | 文件大小 `[+-]<num><K\|M\|G>` 或 `min:max` | `'+1M'`, `'-500K'`, `'100:1000'` |
+| `--filter-exclude-size <s>` | 排除文件大小 | `'+10M'` (排除大于 10MB) |
+| `--filter-include-owner <id\|name>` | 文件属主 UID 或用户名 | `'1000'`, `'zaria'` |
+| `--filter-exclude-owner <id\|name>` | 排除属主 | `'root'` |
+| `--filter-include-group <id\|name>` | 文件属组 GID 或组名 | `'1000'`, `'staff'` |
+| `--filter-exclude-group <id\|name>` | 排除属组 | |
+
+#### 筛选示例
+
+```bash
+# 只备份 .cpp 和 .h，排除测试目录和大于 10MB 的文件
+backup backup ./src ./src.bak \
+  --filter-include-name '*.cpp' \
+  --filter-include-name '*.h' \
+  --filter-exclude-path '*/test/*' \
+  --filter-exclude-size '+10M'
+
+# 只备份 2024 年内修改的 .txt 文件
+backup backup ./docs ./docs.bak \
+  --filter-include-name '*.txt' \
+  --filter-include-mtime 'between:2024-01-01,2024-12-31'
+
+# 只备份普通文件，排除目录和符号链接
+backup backup ./data ./data.bak --filter-include-type 'f' --pack tar
+
+# 远程备份 + 筛选
+backup remote-backup /home/zaria/projects \
+  --server 192.168.1.100:8848 --username zaria --password pass \
+  --filter-include-name '*.py' --filter-exclude-path '*/venv/*'
+```
+
 ## 使用示例
 
 ### 单机模式

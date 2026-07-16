@@ -76,6 +76,14 @@ dd if=/dev/urandom of={TMP_DIR}/srcbin/zeros.dat bs=1024 count=5 2>/dev/null
 ln -sf ../a.txt {TMP_DIR}/srcspecial/link.txt 2>/dev/null
 mkfifo {TMP_DIR}/srcspecial/myfifo 2>/dev/null || true
 mkdir -p {TMP_DIR}/srcspecial/emptydir
+mkdir -p {TMP_DIR}/srcfilter/sub
+echo 'hello cpp' > {TMP_DIR}/srcfilter/main.cpp
+echo 'hello header' > {TMP_DIR}/srcfilter/util.h
+echo 'temp data' > {TMP_DIR}/srcfilter/notes.tmp
+echo 'build cache' > {TMP_DIR}/srcfilter/build.log
+dd if=/dev/urandom of={TMP_DIR}/srcfilter/sub/large.dat bs=1024 count=100 2>/dev/null
+echo 'nested cpp' > {TMP_DIR}/srcfilter/sub/deep.cpp
+echo 'readme' > {TMP_DIR}/srcfilter/README.md
 for i in $(seq 1 100); do echo "line_${{i}}_repeated_data_abcdefghij" >> {TMP_DIR}/srclarge/big.txt; done
 """
     add("SETUP-01", "环境准备", "创建测试目录和文件",
@@ -258,7 +266,94 @@ for i in $(seq 1 100); do echo "line_${{i}}_repeated_data_abcdefghij" >> {TMP_DI
         "Restore complete!",
         verify=f"grep -q '你好世界' {TMP_DIR}/restore/cn_out/srctext/chinese.txt && echo OK || echo FAIL")
 
-    # ===================== 8. 健壮性测试 =====================
+    # ===================== 8. 文件筛选功能测试 =====================
+    add("FILTER-01", "单机/筛选(名称)", "按文件名glob筛选备份",
+        "重要", "功能测试",
+        "验证 --filter-include-name 只备份匹配文件",
+        "测试环境就绪",
+        f"backup srcfilter with name filter -> restore, check only *.cpp files",
+        f"{BINARY} backup {TMP_DIR}/srcfilter {TMP_DIR}/restore/filter_name.bak --pack tar "
+        f"--filter-include-name '*.cpp' && "
+        f"{BINARY} restore {TMP_DIR}/restore/filter_name.bak {TMP_DIR}/restore/filter_name_out",
+        "Restore complete!",
+        verify=f"test -f {TMP_DIR}/restore/filter_name_out/srcfilter/main.cpp && "
+               f"test -f {TMP_DIR}/restore/filter_name_out/srcfilter/sub/deep.cpp && "
+               f"test ! -f {TMP_DIR}/restore/filter_name_out/srcfilter/util.h && "
+               f"test ! -f {TMP_DIR}/restore/filter_name_out/srcfilter/notes.tmp && "
+               f"echo OK")
+
+    add("FILTER-02", "单机/筛选(排除)", "按文件名glob排除",
+        "重要", "功能测试",
+        "验证 --filter-exclude-name 排除匹配文件",
+        "测试环境就绪",
+        f"backup srcfilter excluding *.tmp and *.log",
+        f"{BINARY} backup {TMP_DIR}/srcfilter {TMP_DIR}/restore/filter_excl.bak --pack tar "
+        f"--filter-exclude-name '*.tmp' --filter-exclude-name '*.log' && "
+        f"{BINARY} restore {TMP_DIR}/restore/filter_excl.bak {TMP_DIR}/restore/filter_excl_out",
+        "Restore complete!",
+        verify=f"test -f {TMP_DIR}/restore/filter_excl_out/srcfilter/main.cpp && "
+               f"test -f {TMP_DIR}/restore/filter_excl_out/srcfilter/util.h && "
+               f"test ! -f {TMP_DIR}/restore/filter_excl_out/srcfilter/notes.tmp && "
+               f"test ! -f {TMP_DIR}/restore/filter_excl_out/srcfilter/build.log && "
+               f"echo OK")
+
+    add("FILTER-03", "单机/筛选(大小)", "按文件大小排除大文件",
+        "重要", "功能测试",
+        "验证 --filter-exclude-size 排除超过指定大小的文件",
+        "测试环境就绪",
+        f"backup srcfilter excluding files > 50KB",
+        f"{BINARY} backup {TMP_DIR}/srcfilter {TMP_DIR}/restore/filter_size.bak --pack tar "
+        f"--filter-exclude-size '+50K' && "
+        f"{BINARY} restore {TMP_DIR}/restore/filter_size.bak {TMP_DIR}/restore/filter_size_out",
+        "Restore complete!",
+        verify=f"test -f {TMP_DIR}/restore/filter_size_out/srcfilter/main.cpp && "
+               f"test ! -f {TMP_DIR}/restore/filter_size_out/srcfilter/sub/large.dat && "
+               f"echo OK")
+
+    add("FILTER-04", "单机/筛选(路径)", "按路径glob排除子目录",
+        "重要", "功能测试",
+        "验证 --filter-exclude-path 排除指定子目录",
+        "测试环境就绪",
+        f"backup srcfilter excluding sub/ directory",
+        f"{BINARY} backup {TMP_DIR}/srcfilter {TMP_DIR}/restore/filter_path.bak --pack tar "
+        f"--filter-exclude-path 'sub/*' && "
+        f"{BINARY} restore {TMP_DIR}/restore/filter_path.bak {TMP_DIR}/restore/filter_path_out",
+        "Restore complete!",
+        verify=f"test -f {TMP_DIR}/restore/filter_path_out/srcfilter/main.cpp && "
+               f"test ! -f {TMP_DIR}/restore/filter_path_out/srcfilter/sub/deep.cpp && "
+               f"test ! -f {TMP_DIR}/restore/filter_path_out/srcfilter/sub/large.dat && "
+               f"echo OK")
+
+    add("FILTER-05", "单机/筛选(组合)", "名称include + 大小exclude组合",
+        "重要", "功能测试",
+        "验证跨维度AND组合：只备份.cpp且不超过50KB",
+        "测试环境就绪",
+        f"backup srcfilter: include *.cpp, exclude >50K",
+        f"{BINARY} backup {TMP_DIR}/srcfilter {TMP_DIR}/restore/filter_combo.bak --pack tar "
+        f"--filter-include-name '*.cpp' --filter-include-name '*.md' "
+        f"--filter-exclude-size '+50K' && "
+        f"{BINARY} restore {TMP_DIR}/restore/filter_combo.bak {TMP_DIR}/restore/filter_combo_out",
+        "Restore complete!",
+        verify=f"test -f {TMP_DIR}/restore/filter_combo_out/srcfilter/main.cpp && "
+               f"test -f {TMP_DIR}/restore/filter_combo_out/srcfilter/README.md && "
+               f"test ! -f {TMP_DIR}/restore/filter_combo_out/srcfilter/util.h && "
+               f"test ! -f {TMP_DIR}/restore/filter_combo_out/srcfilter/notes.tmp && "
+               f"echo OK")
+
+    add("FILTER-06", "单机/筛选(类型)", "只备份普通文件排除目录",
+        "重要", "功能测试",
+        "验证 --filter-include-type 'f' 只保留普通文件",
+        "测试环境就绪",
+        f"backup srcfilter: regular files only",
+        f"{BINARY} backup {TMP_DIR}/srcfilter {TMP_DIR}/restore/filter_type.bak --pack tar "
+        f"--filter-include-type 'f' && "
+        f"{BINARY} restore {TMP_DIR}/restore/filter_type.bak {TMP_DIR}/restore/filter_type_out",
+        "Restore complete!",
+        verify=f"test -f {TMP_DIR}/restore/filter_type_out/srcfilter/main.cpp && "
+               f"test -f {TMP_DIR}/restore/filter_type_out/srcfilter/sub/deep.cpp && "
+               f"echo OK")
+
+    # ===================== 9. 健壮性测试 =====================
     add("ROBUST-01", "单机/错误密码还原", "用错误密码还原加密备份",
         "重要", "健壮性测试", "验证错误密码还原时程序不崩溃，数据损坏但不异常退出",
         "已有XOR加密备份",

@@ -11,6 +11,8 @@
 
 #include "StrategySetup.h"
 
+class FilterSetupWidget;
+
 /// 远程备份选项卡
 class RemoteBackupTab : public QWidget {
     Q_OBJECT
@@ -37,6 +39,7 @@ private:
     QComboBox* encryptCombo_;
     QLineEdit* backupNameEdit_;     // 备份名称（可选）
     QLineEdit* filePasswordEdit_;   // 文件加密密码
+    FilterSetupWidget* filterWidget_;
 
     QPushButton* startBtn_;
     QProgressBar* progressBar_;

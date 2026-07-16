@@ -3,6 +3,7 @@
 
 #include <QObject>
 #include <QString>
+#include "filter/CompositeFilter.h"
 
 class IPackStrategy;
 class ICompressStrategy;
@@ -18,6 +19,7 @@ public:
                           ICompressStrategy* compress,
                           IEncryptStrategy* encrypt,
                           const QString& password,
+                          const CompositeFilter& filter,
                           QObject* parent = nullptr);
 
 public slots:
@@ -34,6 +36,7 @@ private:
     ICompressStrategy* compress_;
     IEncryptStrategy* encrypt_;
     QString password_;
+    CompositeFilter filter_;
 };
 
 #endif // GUI_BACKUPWORKER_H

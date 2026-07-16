@@ -7,6 +7,7 @@
 #include "pack/IPackStrategy.h"
 #include "compress/ICompressStrategy.h"
 #include "encrypt/IEncryptStrategy.h"
+#include "filter/IFileFilter.h"
 #include <string>
 #include <vector>
 #include <cstdint>
@@ -20,6 +21,9 @@ public:
 
     /// 设置自定义备份名称（空字符串=自动生成）
     void setBackupName(const std::string& name);
+
+    /// 设置文件筛选器（nullptr = 不筛选）
+    void setFileFilter(IFileFilter* filter);
 
     /// 执行远程备份
     /// @param packStrategy 打包策略（必须）
@@ -38,6 +42,7 @@ private:
     std::string username_;
     std::string password_;
     std::string backupName_;
+    IFileFilter* fileFilter_ = nullptr;
     NetworkSocket socket_;
     TransportEncryptor encryptor_;
     uint64_t sendSeq_ = 0;

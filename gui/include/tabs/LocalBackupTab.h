@@ -10,6 +10,8 @@
 
 #include "StrategySetup.h"
 
+class FilterSetupWidget;
+
 /// 本地备份选项卡
 class LocalBackupTab : public QWidget {
     Q_OBJECT
@@ -35,6 +37,7 @@ private:
     QComboBox* compressCombo_;
     QComboBox* encryptCombo_;
     QLineEdit* passwordEdit_;
+    FilterSetupWidget* filterWidget_;
 
     // 操作控件
     QPushButton* startBtn_;

@@ -15,6 +15,7 @@ set(GUI_HEADERS
     include/workers/RemoteRestoreWorker.h
     include/workers/RemoteListWorker.h
     include/workers/RegisterWorker.h
+    include/widgets/FilterSetupWidget.h
 )
 
 set(GUI_SOURCES
@@ -33,6 +34,7 @@ set(GUI_SOURCES
     src/workers/RemoteRestoreWorker.cpp
     src/workers/RemoteListWorker.cpp
     src/workers/RegisterWorker.cpp
+    src/widgets/FilterSetupWidget.cpp
 )
 
 add_executable(backup-gui ${GUI_SOURCES} ${GUI_HEADERS})

@@ -1,5 +1,6 @@
 #include "tabs/LocalBackupTab.h"
 #include "workers/BackupWorker.h"
+#include "widgets/FilterSetupWidget.h"
 
 #include <QFormLayout>
 #include <QVBoxLayout>
@@ -59,6 +60,10 @@ LocalBackupTab::LocalBackupTab(QWidget* parent)
     form->addRow("文件密码:", passwordEdit_);
 
     mainLayout->addLayout(form);
+
+    // ---- 文件筛选 ----
+    filterWidget_ = new FilterSetupWidget(this);
+    mainLayout->addWidget(filterWidget_);
 
     // ---- 操作按钮 ----
     startBtn_ = new QPushButton("▶ 开始备份");
@@ -158,7 +163,8 @@ void LocalBackupTab::onStartBackup() {
 
     // 创建线程 + Worker
     auto* thread = new QThread(this);
-    auto* worker = new BackupWorker(src, out, pack, compress, encrypt, password);
+    auto* worker = new BackupWorker(src, out, pack, compress, encrypt, password,
+                                    filterWidget_->buildFilter());
     worker->moveToThread(thread);
 
     connect(thread, &QThread::started, worker, &BackupWorker::run);
@@ -194,6 +200,7 @@ void LocalBackupTab::setFormEnabled(bool enabled) {
     compressCombo_->setEnabled(enabled);
     encryptCombo_->setEnabled(enabled);
     passwordEdit_->setEnabled(enabled);
+    filterWidget_->setFormEnabled(enabled);
     startBtn_->setEnabled(enabled);
 }
 

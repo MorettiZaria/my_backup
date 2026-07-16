@@ -8,6 +8,7 @@ BackupWorker::BackupWorker(const QString& sourceDir,
                              ICompressStrategy* compress,
                              IEncryptStrategy* encrypt,
                              const QString& password,
+                             const CompositeFilter& filter,
                              QObject* parent)
     : QObject(parent)
     , sourceDir_(sourceDir)
@@ -15,7 +16,8 @@ BackupWorker::BackupWorker(const QString& sourceDir,
     , pack_(pack)
     , compress_(compress)
     , encrypt_(encrypt)
-    , password_(password) {}
+    , password_(password)
+    , filter_(filter) {}
 
 void BackupWorker::run() {
     emit started();
@@ -24,6 +26,7 @@ void BackupWorker::run() {
     engine.setPackStrategy(pack_);
     engine.setCompressStrategy(compress_);
     engine.setEncryptStrategy(encrypt_);
+    if (!filter_.isEmpty()) engine.setFileFilter(&filter_);
 
     bool ok = engine.run(sourceDir_.toStdString(),
                          outputFile_.toStdString(),
