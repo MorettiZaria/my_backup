@@ -158,46 +158,98 @@ TEST(NetworkSocketTest, SendReceiveRoundTrip) {
 
 // ===================== ServerSession via Local Client =====================
 
+// 完整注册→登录流程：先注册新用户，登出后用该用户登录
 TEST(ServerSessionTest, RegisterAndLoginFlow) {
     std::string tdir = tmpDir();
-    uint16_t port = findFreePort();
 
-    std::thread serverThread([port, tdir]() {
-        NetworkSocket server;
-        if (!server.bindAndListen(port, 1)) return;
-        NetworkSocket sock = server.accept();
-        if (!sock.isValid()) return;
-        ServerSession session(std::move(sock), tdir);
-        session.run();
-    });
-
-    std::this_thread::sleep_for(std::chrono::milliseconds(100));
-
-    // Client: connect, handshake, register
-    NetworkSocket client;
-    ASSERT_TRUE(client.connect("127.0.0.1", port));
-
-    // Handshake
-    std::vector<uint8_t> helloPayload;
-    writeUint16BE(helloPayload, PROTOCOL_VERSION);
-    client.sendMessage(NetworkMessage::make(MessageType::CLIENT_HELLO, std::move(helloPayload)));
-
-    auto serverHello = client.receiveMessage();
-    ASSERT_EQ(serverHello.type, static_cast<uint16_t>(MessageType::SERVER_HELLO));
-
-    // Register
+    // 预先生成凭证（注册和登录共用）
+    std::string username = "testuser";
     auto salt = UserManager::generateSalt();
-    auto hash = UserManager::computeHash("testuser", salt);
-    std::vector<uint8_t> regPayload;
-    writeStringBE(regPayload, "testuser");
-    regPayload.insert(regPayload.end(), salt.begin(), salt.end());
-    regPayload.insert(regPayload.end(), hash.begin(), hash.end());
-    client.sendMessage(NetworkMessage::make(MessageType::REGISTER_REQUEST, std::move(regPayload)));
+    auto hash = UserManager::computeHash(username, salt);
 
-    auto regResp = client.receiveMessage();
-    EXPECT_EQ(regResp.type, static_cast<uint16_t>(MessageType::REGISTER_RESPONSE));
+    // --- 第一步：注册 ---
+    {
+        uint16_t port = findFreePort();
+        std::thread serverThread([port, &tdir]() {
+            NetworkSocket server;
+            if (!server.bindAndListen(port, 1)) return;
+            NetworkSocket sock = server.accept();
+            if (!sock.isValid()) return;
+            ServerSession session(std::move(sock), tdir);
+            session.run();
+        });
 
-    serverThread.join();
+        std::this_thread::sleep_for(std::chrono::milliseconds(100));
+
+        NetworkSocket client;
+        ASSERT_TRUE(client.connect("127.0.0.1", port));
+
+        // Handshake
+        std::vector<uint8_t> hp;
+        writeUint16BE(hp, PROTOCOL_VERSION);
+        client.sendMessage(NetworkMessage::make(MessageType::CLIENT_HELLO, std::move(hp)));
+        auto sh = client.receiveMessage();
+        ASSERT_EQ(sh.type, static_cast<uint16_t>(MessageType::SERVER_HELLO));
+
+        // Register
+        std::vector<uint8_t> rp;
+        writeStringBE(rp, username);
+        rp.insert(rp.end(), salt.begin(), salt.end());
+        rp.insert(rp.end(), hash.begin(), hash.end());
+        client.sendMessage(NetworkMessage::make(MessageType::REGISTER_REQUEST, std::move(rp)));
+
+        auto regResp = client.receiveMessage();
+        ASSERT_EQ(regResp.type, static_cast<uint16_t>(MessageType::REGISTER_RESPONSE));
+        ASSERT_EQ(regResp.payload[0], 0u);  // success
+
+        // 登出
+        client.sendMessage(NetworkMessage(static_cast<uint16_t>(MessageType::LOGOUT), {}));
+        serverThread.join();
+    }
+
+    // --- 第二步：用刚才注册的账号登录 ---
+    {
+        uint16_t port = findFreePort();
+        std::thread serverThread([port, &tdir]() {
+            NetworkSocket server;
+            if (!server.bindAndListen(port, 1)) return;
+            NetworkSocket sock = server.accept();
+            if (!sock.isValid()) return;
+            ServerSession session(std::move(sock), tdir);
+            session.run();
+        });
+
+        std::this_thread::sleep_for(std::chrono::milliseconds(100));
+
+        NetworkSocket client;
+        ASSERT_TRUE(client.connect("127.0.0.1", port));
+
+        // Handshake
+        std::vector<uint8_t> hp;
+        writeUint16BE(hp, PROTOCOL_VERSION);
+        client.sendMessage(NetworkMessage::make(MessageType::CLIENT_HELLO, std::move(hp)));
+        auto sh = client.receiveMessage();
+        ASSERT_EQ(sh.type, static_cast<uint16_t>(MessageType::SERVER_HELLO));
+
+        // Login
+        std::vector<uint8_t> lp;
+        writeStringBE(lp, username);
+        client.sendMessage(NetworkMessage::make(MessageType::LOGIN_REQUEST, std::move(lp)));
+
+        auto saltMsg = client.receiveMessage();
+        ASSERT_EQ(saltMsg.type, static_cast<uint16_t>(MessageType::LOGIN_SALT));
+
+        // 发送密码哈希
+        client.sendMessage(NetworkMessage::make(MessageType::LOGIN_PROOF, hash));
+        auto loginResp = client.receiveMessage();
+        ASSERT_EQ(loginResp.type, static_cast<uint16_t>(MessageType::LOGIN_RESPONSE));
+        EXPECT_EQ(loginResp.payload[0], 0u);  // login success
+
+        // 登出
+        client.sendMessage(NetworkMessage(static_cast<uint16_t>(MessageType::LOGOUT), {}));
+        serverThread.join();
+    }
+
     rmrf(tdir);
 }
 

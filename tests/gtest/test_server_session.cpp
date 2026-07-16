@@ -200,6 +200,7 @@ TEST(ServerSessionIntegrationTest, LoginFailedWrongPassword) {
     auto resp = client.receiveMessage();
     EXPECT_EQ(resp.payload[0], 1u); // failed
 
+    client.sendMessage(NetworkMessage::make(MessageType::LOGOUT));
     serverThread.join();
     rmrf(tdir);
 }
@@ -273,6 +274,7 @@ TEST(ServerSessionIntegrationTest, NotLoggedInCommands) {
     auto resp = client.receiveMessage();
     EXPECT_EQ(resp.type, static_cast<uint16_t>(MessageType::ERROR_MESSAGE));
 
+    client.sendMessage(NetworkMessage::make(MessageType::LOGOUT));
     serverThread.join();
     rmrf(tdir);
 }
@@ -402,6 +404,8 @@ TEST(ServerSessionIntegrationTest, BackupWithCustomName) {
     auto hash = UserManager::computeHash("nameuser", salt);
     mgr.registerUserRaw("nameuser", salt, hash);
 
+    std::vector<uint8_t> serverChallenge;
+
     std::thread serverThread([port, tdir]() {
         NetworkSocket server;
         if (!server.bindAndListen(port, 1)) return;
@@ -415,24 +419,54 @@ TEST(ServerSessionIntegrationTest, BackupWithCustomName) {
 
     NetworkSocket client;
     ASSERT_TRUE(client.connect("127.0.0.1", port));
+
+    // Handshake
     std::vector<uint8_t> hp;
     writeUint16BE(hp, PROTOCOL_VERSION);
     client.sendMessage(NetworkMessage::make(MessageType::CLIENT_HELLO, hp));
-    client.receiveMessage();
+    auto sh = client.receiveMessage();
+    ASSERT_EQ(sh.type, static_cast<uint16_t>(MessageType::SERVER_HELLO));
 
+    // Extract server challenge for encryption
+    if (sh.payload.size() >= 10) {
+        size_t off = 0;
+        readUint16BE(sh.payload.data(), off); // skip version
+        serverChallenge.assign(sh.payload.begin() + static_cast<ptrdiff_t>(off), sh.payload.end());
+    }
+
+    // Login
     std::vector<uint8_t> lp;
     writeStringBE(lp, "nameuser");
     client.sendMessage(NetworkMessage::make(MessageType::LOGIN_REQUEST, lp));
-    client.receiveMessage();
+    auto saltMsg = client.receiveMessage();
+    ASSERT_EQ(saltMsg.type, static_cast<uint16_t>(MessageType::LOGIN_SALT));
     client.sendMessage(NetworkMessage::make(MessageType::LOGIN_PROOF, hash));
-    client.receiveMessage();
+    auto loginResp = client.receiveMessage(); // LOGIN_RESPONSE sent unencrypted
+    ASSERT_EQ(loginResp.payload[0], 0u);
 
-    // Send custom backup name
+    // Setup client-side encryption (server activates encryption after login)
+    TransportEncryptor clientEnc;
+    clientEnc.initSession("nameuser", serverChallenge);
+    uint64_t sendSeq = 0, recvSeq = 0;
+    auto sendEnc = [&](const NetworkMessage& msg) {
+        NetworkMessage enc = msg;
+        enc.payload = clientEnc.encrypt(msg.payload, sendSeq++);
+        return client.sendMessage(enc);
+    };
+    auto recvEnc = [&]() -> NetworkMessage {
+        auto msg = client.receiveMessage();
+        if (msg.type != 0) {
+            msg.payload = clientEnc.decrypt(msg.payload, recvSeq++);
+        }
+        return msg;
+    };
+
+    // Send custom backup name (encrypted now)
     std::vector<uint8_t> namePayload;
     writeStringBE(namePayload, "MySpecialBackup");
-    client.sendMessage(NetworkMessage::make(MessageType::BACKUP_START, namePayload));
+    sendEnc(NetworkMessage::make(MessageType::BACKUP_START, namePayload));
 
-    // Send backup data
+    // Send backup data (encrypted)
     std::vector<uint8_t> bak(19 + 4, 0);
     bak[0] = 0x50; bak[1] = 0x55; bak[2] = 0x4B; bak[3] = 0x42; // "BKUP" magic
     bak[8] = 0x01; bak[9] = 0x00; bak[10] = 0x00; bak[11] = 0x00; // version=1
@@ -443,19 +477,24 @@ TEST(ServerSessionIntegrationTest, BackupWithCustomName) {
     writeStringBE(bakP, ".bak_payload");
     writeUint64BE(bakP, bak.size());
     bakP.insert(bakP.end(), bak.begin(), bak.end());
-    client.sendMessage(NetworkMessage::make(MessageType::FILE_DATA, bakP));
+    sendEnc(NetworkMessage::make(MessageType::FILE_DATA, bakP));
 
     std::vector<uint8_t> metaP;
     writeStringBE(metaP, ".bak_metadata");
     writeUint64BE(metaP, 4);
     metaP.push_back(0); metaP.push_back(0); metaP.push_back(0); metaP.push_back(0);
-    client.sendMessage(NetworkMessage::make(MessageType::FILE_DATA, metaP));
+    sendEnc(NetworkMessage::make(MessageType::FILE_DATA, metaP));
 
-    client.sendMessage(NetworkMessage::make(MessageType::BACKUP_COMPLETE));
-    auto ack = client.receiveMessage();
+    sendEnc(NetworkMessage::make(MessageType::BACKUP_COMPLETE));
+    auto ack = recvEnc();
     EXPECT_EQ(ack.type, static_cast<uint16_t>(MessageType::BACKUP_COMPLETE));
 
-    client.sendMessage(NetworkMessage::make(MessageType::LOGOUT));
+    // Verify the backup name was stored correctly
+    size_t offB = 0;
+    std::string backupId = readStringBE(ack.payload.data(), offB);
+    EXPECT_FALSE(backupId.empty());
+
+    sendEnc(NetworkMessage::make(MessageType::LOGOUT));
     serverThread.join();
     rmrf(tdir);
 }
@@ -487,6 +526,7 @@ TEST(ServerSessionIntegrationTest, UnauthenticatedCommand) {
     auto resp = client.receiveMessage();
     EXPECT_EQ(resp.type, static_cast<uint16_t>(MessageType::ERROR_MESSAGE));
 
+    client.sendMessage(NetworkMessage::make(MessageType::LOGOUT));
     serverThread.join();
     rmrf(tdir);
 }
