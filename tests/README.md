@@ -67,11 +67,12 @@ xcrun llvm-cov report ./tests/gtest/backup_gtest -instr-profile=coverage.profdat
 python3 tests/integration/run_tests.py
 ```
 
-脚本会自动完成编译（如未编译）、运行全部测试用例（单机 + 网络），并生成 `tests/integration/integration_report.md` 测试报告。
+运行全部测试用例（单机 + 网络 + 文件筛选），并生成 `tests/integration/integration_report.md` 测试报告。运行前需先确保项目已编译。
 
 测试覆盖：
 - 单机模式：tar/index 打包、RLE/Huffman 压缩、XOR/Vigenere 加密、全功能组合
 - 网络模式（启用`127.0.0.1`，即以本地机器为服务端口）：用户注册/登录、远程备份/还原、远程备份列表、加密传输
+- 文件筛选：名称/路径/大小/类型/修改时间筛选、include/exclude、跨维度 AND/OR 组合
 - 健壮性：错误密码、重复注册、非法参数、连接拒绝
 - 性能：压缩率对比
 
@@ -219,8 +220,8 @@ mkdir -p build && cd build && cmake .. && make -j$(nproc) && cd ..
 
 ```bash
 # 启动服务器（后台运行）
-# 服务器绑定 0.0.0.0:18848，允许来自任何 IP 的连接
-./build/client/backup server start --port 18848 --storage /tmp/test_server_data &
+# 服务器绑定 0.0.0.0:18849，允许来自任何 IP 的连接
+./build/client/backup server start --port 18849 --storage /tmp/test_server_data &
 SERVER_PID=$!
 sleep 1
 
@@ -233,25 +234,25 @@ kill -0 $SERVER_PID && echo "Server is running" || echo "Server failed to start"
 ```bash
 # 注册新用户
 ./build/client/backup user register \
-    --server 127.0.0.1:18848 \
+    --server 127.0.0.1:18849 \
     --username testuser --password testpass
 # 预期: User registered successfully.
 
 # 重复注册（应失败）
 ./build/client/backup user register \
-    --server 127.0.0.1:18848 \
+    --server 127.0.0.1:18849 \
     --username testuser --password testpass
 # 预期: Error: registration failed (user may already exist).
 
 # 正确密码登录
 ./build/client/backup user login \
-    --server 127.0.0.1:18848 \
+    --server 127.0.0.1:18849 \
     --username testuser --password testpass
 # 预期: Login successful.
 
 # 错误密码登录（应失败）
 ./build/client/backup user login \
-    --server 127.0.0.1:18848 \
+    --server 127.0.0.1:18849 \
     --username testuser --password wrongpass
 # 预期: Error: login failed (wrong password?).
 ```
@@ -261,7 +262,7 @@ kill -0 $SERVER_PID && echo "Server is running" || echo "Server failed to start"
 ```bash
 # 远程备份（打包 = tar）
 ./build/client/backup remote-backup tests/integration/testdata \
-    --server 127.0.0.1:18848 \
+    --server 127.0.0.1:18849 \
     --username testuser --password testpass \
     --pack tar
 # 预期: Backup complete! ID: backup_000001
@@ -276,7 +277,7 @@ ls -la /tmp/test_server_data/testuser/backup_000001/
 ```bash
 # 远程还原
 ./build/client/backup remote-restore /tmp/test_restore_remote \
-    --server 127.0.0.1:18848 \
+    --server 127.0.0.1:18849 \
     --username testuser --password testpass
 
 # 数据完整性验证
@@ -304,7 +305,7 @@ stat -c '%a' /tmp/test_restore_remote/data.txt
 
 ```bash
 ./build/client/backup remote-list \
-    --server 127.0.0.1:18848 \
+    --server 127.0.0.1:18849 \
     --username testuser --password testpass
 # 预期: 显示备份列表（含 backup ID 和时间戳）
 ```
@@ -314,7 +315,7 @@ stat -c '%a' /tmp/test_restore_remote/data.txt
 ```bash
 # 全功能远程备份
 ./build/client/backup remote-backup tests/integration/testdata \
-    --server 127.0.0.1:18848 \
+    --server 127.0.0.1:18849 \
     --username testuser --password testpass \
     --pack index --compress huffman \
     --encrypt xor --file-password filepass
@@ -325,7 +326,7 @@ xxd /tmp/test_server_data/testuser/backup_000002/payload.bin | head -3
 
 # 正确密码还原
 ./build/client/backup remote-restore /tmp/test_restore_enc \
-    --server 127.0.0.1:18848 \
+    --server 127.0.0.1:18849 \
     --username testuser --password testpass \
     --file-password filepass
     
@@ -334,7 +335,7 @@ diff -r tests/integration/testdata /tmp/test_restore_enc
 
 # 错误文件密码还原（数据应损坏）
 ./build/client/backup remote-restore /tmp/test_restore_bad \
-    --server 127.0.0.1:18848 \
+    --server 127.0.0.1:18849 \
     --username testuser --password testpass \
     --file-password wrongpass
 cat /tmp/test_restore_bad/hello.txt
@@ -346,7 +347,7 @@ cat /tmp/test_restore_bad/hello.txt
 ```bash
 # 连接不存在用户（用户未注册就直接备份）
 ./build/client/backup remote-backup tests/integration/testdata \
-    --server 127.0.0.1:18848 \
+    --server 127.0.0.1:18849 \
     --username nonexist --password testpass \
     --pack tar
 # 预期: Login failed, trying to register... (注册成功则继续备份)
@@ -359,18 +360,157 @@ cat /tmp/test_restore_bad/hello.txt
 
 # 未备份过的用户尝试还原
 ./build/client/backup user register \
-    --server 127.0.0.1:18848 \
+    --server 127.0.0.1:18849 \
     --username newuser --password newpass
 ./build/client/backup remote-restore /tmp/test_restore_empty \
-    --server 127.0.0.1:18848 \
+    --server 127.0.0.1:18849 \
     --username newuser --password newpass
 # 预期: No backup found.
 ```
 
 > **故障排除**：
-> - `Connection refused` → 检查服务器防火墙：`sudo ufw allow 8848/tcp`
+> - `Connection refused` → 检查服务器防火墙：`sudo ufw allow 18849/tcp`
 > - `No route to host` → 检查两台电脑是否在同一网段
 > - `Connection timed out` → 检查路由器是否开启了 AP 隔离（客户端隔离）功能
+
+---
+
+## 第三部分：文件筛选功能测试
+
+文件筛选通过 `--filter-include-*` / `--filter-exclude-*` 系列参数控制备份范围。规则逻辑：同维度多条规则为 **OR**，跨维度规则为 **AND**，exclude 优先级高于 include。
+
+先准备测试数据：
+
+```bash
+mkdir -p /tmp/test_filter/sub
+echo 'hello cpp' > /tmp/test_filter/main.cpp
+echo 'hello header' > /tmp/test_filter/util.h
+echo 'temp data' > /tmp/test_filter/notes.tmp
+echo 'build cache' > /tmp/test_filter/build.log
+dd if=/dev/urandom of=/tmp/test_filter/sub/large.dat bs=1024 count=100 2>/dev/null
+echo 'nested cpp' > /tmp/test_filter/sub/deep.cpp
+echo 'readme' > /tmp/test_filter/README.md
+```
+
+### 测试 F1：按文件名 include（glob）
+
+```bash
+./build/client/backup backup /tmp/test_filter /tmp/output_filter_name.bak --pack tar \
+    --filter-include-name '*.cpp'
+./build/client/backup restore /tmp/output_filter_name.bak /tmp/restored_filter_name
+
+# 验证：只有 .cpp 文件
+test -f /tmp/restored_filter_name/test_filter/main.cpp && echo "OK"
+test -f /tmp/restored_filter_name/test_filter/sub/deep.cpp && echo "OK"
+test -f /tmp/restored_filter_name/test_filter/util.h && echo "FAIL: .h should be excluded"
+test -f /tmp/restored_filter_name/test_filter/notes.tmp && echo "FAIL: .tmp should be excluded"
+```
+
+### 测试 F2：按文件名 exclude（glob）
+
+```bash
+./build/client/backup backup /tmp/test_filter /tmp/output_filter_excl.bak --pack tar \
+    --filter-exclude-name '*.tmp' --filter-exclude-name '*.log'
+
+# 验证：.tmp 和 .log 被排除，其他保留
+./build/client/backup restore /tmp/output_filter_excl.bak /tmp/restored_filter_excl
+test -f /tmp/restored_filter_excl/test_filter/main.cpp && echo "OK: .cpp kept"
+test ! -f /tmp/restored_filter_excl/test_filter/notes.tmp && echo "OK: .tmp excluded"
+test ! -f /tmp/restored_filter_excl/test_filter/build.log && echo "OK: .log excluded"
+```
+
+### 测试 F3：按文件大小排除
+
+```bash
+# 排除 >5KB 的文件（large.dat 是 100KB，应被排除）
+./build/client/backup backup /tmp/test_filter /tmp/output_filter_size.bak --pack tar \
+    --filter-exclude-size '+5K'
+./build/client/backup restore /tmp/output_filter_size.bak /tmp/restored_filter_size
+
+test -f /tmp/restored_filter_size/test_filter/main.cpp && echo "OK: small file kept"
+test ! -f /tmp/restored_filter_size/test_filter/sub/large.dat && echo "OK: large file excluded"
+```
+
+### 测试 F4：按路径排除子目录
+
+```bash
+./build/client/backup backup /tmp/test_filter /tmp/output_filter_path.bak --pack tar \
+    --filter-exclude-path 'sub/*'
+./build/client/backup restore /tmp/output_filter_path.bak /tmp/restored_filter_path
+
+test -f /tmp/restored_filter_path/test_filter/main.cpp && echo "OK: root file kept"
+test ! -f /tmp/restored_filter_path/test_filter/sub/deep.cpp && echo "OK: sub/ excluded"
+```
+
+### 测试 F5：跨维度 AND 组合
+
+```bash
+# include-name *.cpp AND include-path 'sub/*' → 只备份 sub/ 下的 .cpp
+./build/client/backup backup /tmp/test_filter /tmp/output_filter_and.bak --pack tar \
+    --filter-include-name '*.cpp' --filter-include-path 'sub/*'
+./build/client/backup restore /tmp/output_filter_and.bak /tmp/restored_filter_and
+
+test -f /tmp/restored_filter_and/test_filter/sub/deep.cpp && echo "OK: matches both"
+test ! -f /tmp/restored_filter_and/test_filter/main.cpp && echo "OK: name match but path not"
+```
+
+### 测试 F6：同维度 OR 组合
+
+```bash
+# include-name *.cpp OR *.md OR *.h
+./build/client/backup backup /tmp/test_filter /tmp/output_filter_or.bak --pack tar \
+    --filter-include-name '*.cpp' --filter-include-name '*.md' --filter-include-name '*.h'
+./build/client/backup restore /tmp/output_filter_or.bak /tmp/restored_filter_or
+
+test -f /tmp/restored_filter_or/test_filter/main.cpp && echo "OK"
+test -f /tmp/restored_filter_or/test_filter/README.md && echo "OK"
+test -f /tmp/restored_filter_or/test_filter/util.h && echo "OK"
+test ! -f /tmp/restored_filter_or/test_filter/notes.tmp && echo "OK: not in list"
+```
+
+### 测试 F7：exclude 优先于 include
+
+```bash
+# include *.cpp 但 exclude sub/* → 根目录 .cpp 保留，sub/ 下的 .cpp 被排除
+./build/client/backup backup /tmp/test_filter /tmp/output_filter_pri.bak --pack tar \
+    --filter-include-name '*.cpp' --filter-exclude-path 'sub/*'
+./build/client/backup restore /tmp/output_filter_pri.bak /tmp/restored_filter_pri
+
+test -f /tmp/restored_filter_pri/test_filter/main.cpp && echo "OK: included"
+test ! -f /tmp/restored_filter_pri/test_filter/sub/deep.cpp && echo "OK: exclude wins"
+```
+
+### 测试 F8：按文件类型筛选
+
+```bash
+# 只备份普通文件，排除目录和符号链接
+./build/client/backup backup /tmp/test_filter /tmp/output_filter_type.bak --pack tar \
+    --filter-include-type 'f'
+```
+
+### 测试 F9：筛选 + 压缩/加密组合
+
+```bash
+# 名称筛选 + huffman 压缩
+./build/client/backup backup /tmp/test_filter /tmp/output_filter_comp.bak --pack tar \
+    --compress huffman --filter-include-name '*.cpp'
+./build/client/backup restore /tmp/output_filter_comp.bak /tmp/restored_filter_comp
+
+# 名称排除 + xor 加密
+./build/client/backup backup /tmp/test_filter /tmp/output_filter_enc.bak --pack tar \
+    --encrypt xor --password fltpwd \
+    --filter-exclude-name '*.tmp' --filter-exclude-name '*.log'
+./build/client/backup restore /tmp/output_filter_enc.bak /tmp/restored_filter_enc --password fltpwd
+```
+
+### 测试 F10：筛选结果为空时正常完成
+
+```bash
+# 筛选条件过于严格，无匹配的文件
+./build/client/backup backup /tmp/test_filter /tmp/output_filter_none.bak --pack tar \
+    --filter-include-name '*.xyz'
+# 预期: Backup complete!（程序正常结束，不崩溃）
+```
 
 ---
 

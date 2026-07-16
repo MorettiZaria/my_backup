@@ -50,7 +50,10 @@ build/gui/backup-gui
 ## 启动服务器
 
 ```bash
-# 前台运行
+# 通过 CLI 启动（与测试脚本一致）
+build/client/backup server start --port 8848 --storage ./server_data
+
+# 或使用独立守护进程（更轻量）
 build/server/backup-server --port 8848 --storage ./server_data
 ```
 
@@ -67,15 +70,20 @@ my_backup/
 │   ├── include/            #   头文件：core/ pack/ compress/ encrypt/ metadata/ network/ filter/
 │   └── src/                #   对应 .cpp 实现
 ├── client/                 # CLI 客户端 (backup)
+│   ├── CMakeLists.txt
+│   ├── README.md
 │   └── src/main.cpp        #   所有命令行功能入口
 ├── server/                 # 服务器守护进程 (backup-server)
+│   ├── CMakeLists.txt
 │   └── src/main.cpp        #   轻量级服务器入口
 ├── gui/                    # Qt6 图形界面 (backup-gui)
-│   ├── include/            #   头文件：tabs/ workers/
+│   ├── include/            #   头文件：tabs/ workers/ widgets/
 │   └── src/                #   源文件
-├── tests/                  # 测试数据和脚本
-├── deploy/                 # systemd 服务 + 配置模板
-└── doc/                    # 文档
+├── tests/                  # 测试
+│   ├── gtest/              #   GTest 单元测试（14 个文件）
+│   ├── integration/        #   Python 集成测试 + 测试数据
+│   └── README.md
+└── deploy/                 # systemd 服务 + 配置模板
 ```
 
 ## 技术特性
