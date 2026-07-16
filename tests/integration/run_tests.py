@@ -353,6 +353,215 @@ for i in $(seq 1 100); do echo "line_${{i}}_repeated_data_abcdefghij" >> {TMP_DI
                f"test -f {TMP_DIR}/restore/filter_type_out/srcfilter/sub/deep.cpp && "
                f"echo OK")
 
+    # --- 文件筛选：时间筛选准备 ---
+    setup_time = f"""
+mkdir -p {TMP_DIR}/srctime
+echo 'old file' > {TMP_DIR}/srctime/old.txt
+echo 'recent file' > {TMP_DIR}/srctime/recent.txt
+echo 'very old file' > {TMP_DIR}/srctime/ancient.txt
+touch -t 202001010000 {TMP_DIR}/srctime/old.txt 2>/dev/null || true
+touch -t 202501010000 {TMP_DIR}/srctime/recent.txt 2>/dev/null || true
+touch -t 201501010000 {TMP_DIR}/srctime/ancient.txt 2>/dev/null || true
+"""
+    add("SETUP-FILTER-TIME", "筛选环境准备", "创建有时间戳的筛选测试文件",
+        "重要", "功能测试",
+        "创建带不同 mtime 的文件用于时间筛选测试",
+        "测试环境就绪",
+        "创建 srctime 目录和文件", setup_time + "echo OK\n", "OK",
+        verify=f"test -f {TMP_DIR}/srctime/old.txt && test -f {TMP_DIR}/srctime/recent.txt && echo OK")
+
+    add("FILTER-07", "单机/筛选(mtime)", "按修改时间after筛选",
+        "重要", "功能测试",
+        "验证 --filter-include-mtime 'after:YYYY-MM-DD' 只备份之后的文件",
+        "srctime 目录就绪",
+        f"backup srctime after 2024-01-01",
+        f"{BINARY} backup {TMP_DIR}/srctime {TMP_DIR}/restore/filter_mtime.bak --pack tar "
+        f"--filter-include-mtime 'after:2024-01-01' && "
+        f"{BINARY} restore {TMP_DIR}/restore/filter_mtime.bak {TMP_DIR}/restore/filter_mtime_out",
+        "Restore complete!",
+        verify=f"test -f {TMP_DIR}/restore/filter_mtime_out/srctime/recent.txt && "
+               f"test ! -f {TMP_DIR}/restore/filter_mtime_out/srctime/old.txt && "
+               f"test ! -f {TMP_DIR}/restore/filter_mtime_out/srctime/ancient.txt && "
+               f"echo OK")
+
+    add("FILTER-08", "单机/筛选(mtime)", "按修改时间between筛选",
+        "重要", "功能测试",
+        "验证 --filter-include-mtime 'between:YYYY-MM-DD,YYYY-MM-DD'",
+        "srctime 目录就绪",
+        f"backup srctime between 2019 and 2023",
+        f"{BINARY} backup {TMP_DIR}/srctime {TMP_DIR}/restore/filter_mtime2.bak --pack tar "
+        f"--filter-include-mtime 'between:2019-01-01,2023-12-31' && "
+        f"{BINARY} restore {TMP_DIR}/restore/filter_mtime2.bak {TMP_DIR}/restore/filter_mtime2_out",
+        "Restore complete!",
+        verify=f"test -f {TMP_DIR}/restore/filter_mtime2_out/srctime/old.txt && "
+               f"test ! -f {TMP_DIR}/restore/filter_mtime2_out/srctime/recent.txt && "
+               f"test ! -f {TMP_DIR}/restore/filter_mtime2_out/srctime/ancient.txt && "
+               f"echo OK")
+
+    add("FILTER-09", "单机/筛选(大小范围)", "按文件大小范围include",
+        "重要", "功能测试",
+        "验证 --filter-include-size 'min:max' 范围筛选",
+        "测试环境就绪",
+        f"backup srcfilter with size range",
+        f"{BINARY} backup {TMP_DIR}/srcfilter {TMP_DIR}/restore/filter_sizerange.bak --pack tar "
+        f"--filter-include-size '1:50' && "
+        f"{BINARY} restore {TMP_DIR}/restore/filter_sizerange.bak {TMP_DIR}/restore/filter_sizerange_out",
+        "Restore complete!",
+        verify=f"test -f {TMP_DIR}/restore/filter_sizerange_out/srcfilter/main.cpp && "
+               f"test -f {TMP_DIR}/restore/filter_sizerange_out/srcfilter/util.h && "
+               f"test ! -f {TMP_DIR}/restore/filter_sizerange_out/srcfilter/sub/large.dat && "
+               f"echo OK")
+
+    add("FILTER-10", "单机/筛选(同维度OR)", "多个名称include规则OR组合",
+        "重要", "功能测试",
+        "验证同维度多条规则为OR：*.cpp 或 *.md 或 *.h",
+        "测试环境就绪",
+        f"backup srcfilter: include-name *.cpp OR *.md OR *.h",
+        f"{BINARY} backup {TMP_DIR}/srcfilter {TMP_DIR}/restore/filter_or.bak --pack tar "
+        f"--filter-include-name '*.cpp' --filter-include-name '*.md' --filter-include-name '*.h' && "
+        f"{BINARY} restore {TMP_DIR}/restore/filter_or.bak {TMP_DIR}/restore/filter_or_out",
+        "Restore complete!",
+        verify=f"test -f {TMP_DIR}/restore/filter_or_out/srcfilter/main.cpp && "
+               f"test -f {TMP_DIR}/restore/filter_or_out/srcfilter/README.md && "
+               f"test -f {TMP_DIR}/restore/filter_or_out/srcfilter/util.h && "
+               f"test ! -f {TMP_DIR}/restore/filter_or_out/srcfilter/notes.tmp && "
+               f"test ! -f {TMP_DIR}/restore/filter_or_out/srcfilter/build.log && "
+               f"echo OK")
+
+    add("FILTER-11", "单机/筛选(路径+名称AND)", "路径+名称跨维度AND组合",
+        "重要", "功能测试",
+        "验证 --filter-include-path + --filter-include-name 跨维度AND",
+        "测试环境就绪",
+        f"backup srcfilter: include path sub/* AND name *.cpp",
+        f"{BINARY} backup {TMP_DIR}/srcfilter {TMP_DIR}/restore/filter_and_pathname.bak --pack tar "
+        f"--filter-include-path 'sub/*' --filter-include-name '*.cpp' && "
+        f"{BINARY} restore {TMP_DIR}/restore/filter_and_pathname.bak {TMP_DIR}/restore/filter_and_pathname_out",
+        "Restore complete!",
+        verify=f"test -f {TMP_DIR}/restore/filter_and_pathname_out/srcfilter/sub/deep.cpp && "
+               f"test ! -f {TMP_DIR}/restore/filter_and_pathname_out/srcfilter/main.cpp && "
+               f"test ! -f {TMP_DIR}/restore/filter_and_pathname_out/srcfilter/sub/large.dat && "
+               f"echo OK")
+
+    add("FILTER-12", "单机/筛选(类型+大小AND)", "类型+大小跨维度AND组合",
+        "重要", "功能测试",
+        "验证 --filter-include-type + --filter-include-size 跨维度AND",
+        "测试环境就绪",
+        f"backup srcfilter: regular files AND size >= 20",
+        f"{BINARY} backup {TMP_DIR}/srcfilter {TMP_DIR}/restore/filter_typesize.bak --pack tar "
+        f"--filter-include-type 'f' --filter-include-size '>=20' && "
+        f"{BINARY} restore {TMP_DIR}/restore/filter_typesize.bak {TMP_DIR}/restore/filter_typesize_out",
+        "Restore complete!",
+        verify=f"test -f {TMP_DIR}/restore/filter_typesize_out/srcfilter/sub/large.dat && "
+               f"test ! -f {TMP_DIR}/restore/filter_typesize_out/srcfilter/main.cpp && "
+               f"echo OK")
+
+    add("FILTER-13", "单机/筛选(三维AND)", "名称+路径+大小三维度AND",
+        "重要", "功能测试",
+        "验证三种不同维度同时使用为AND组合",
+        "测试环境就绪",
+        f"backup srcfilter: name=*.dat AND path=sub/* AND size>50K",
+        f"{BINARY} backup {TMP_DIR}/srcfilter {TMP_DIR}/restore/filter_3dim.bak --pack tar "
+        f"--filter-include-name '*.dat' --filter-include-path 'sub/*' --filter-include-size '>50K' && "
+        f"{BINARY} restore {TMP_DIR}/restore/filter_3dim.bak {TMP_DIR}/restore/filter_3dim_out",
+        "Restore complete!",
+        verify=f"test -f {TMP_DIR}/restore/filter_3dim_out/srcfilter/sub/large.dat && "
+               f"test ! -f {TMP_DIR}/restore/filter_3dim_out/srcfilter/sub/deep.cpp && "
+               f"test ! -f {TMP_DIR}/restore/filter_3dim_out/srcfilter/main.cpp && "
+               f"echo OK")
+
+    add("FILTER-14", "单机/筛选(排除优先)", "include被exclude覆盖",
+        "重要", "功能测试",
+        "验证 exclude 优先级高于 include",
+        "测试环境就绪",
+        f"backup srcfilter: include *.cpp but exclude sub/*",
+        f"{BINARY} backup {TMP_DIR}/srcfilter {TMP_DIR}/restore/filter_exclpri.bak --pack tar "
+        f"--filter-include-name '*.cpp' --filter-exclude-path 'sub/*' && "
+        f"{BINARY} restore {TMP_DIR}/restore/filter_exclpri.bak {TMP_DIR}/restore/filter_exclpri_out",
+        "Restore complete!",
+        verify=f"test -f {TMP_DIR}/restore/filter_exclpri_out/srcfilter/main.cpp && "
+               f"test ! -f {TMP_DIR}/restore/filter_exclpri_out/srcfilter/sub/deep.cpp && "
+               f"echo OK")
+
+    add("FILTER-15", "单机/筛选(仅排除)", "只使用exclude，不设include",
+        "重要", "功能测试",
+        "验证只排除某些文件时其余全部保留",
+        "测试环境就绪",
+        f"backup srcfilter: exclude only *.tmp and *.log",
+        f"{BINARY} backup {TMP_DIR}/srcfilter {TMP_DIR}/restore/filter_exclonly.bak --pack tar "
+        f"--filter-exclude-name '*.tmp' --filter-exclude-name '*.log' && "
+        f"{BINARY} restore {TMP_DIR}/restore/filter_exclonly.bak {TMP_DIR}/restore/filter_exclonly_out",
+        "Restore complete!",
+        verify=f"test -f {TMP_DIR}/restore/filter_exclonly_out/srcfilter/main.cpp && "
+               f"test -f {TMP_DIR}/restore/filter_exclonly_out/srcfilter/util.h && "
+               f"test -f {TMP_DIR}/restore/filter_exclonly_out/srcfilter/README.md && "
+               f"test ! -f {TMP_DIR}/restore/filter_exclonly_out/srcfilter/notes.tmp && "
+               f"test ! -f {TMP_DIR}/restore/filter_exclonly_out/srcfilter/build.log && "
+               f"echo OK")
+
+    add("FILTER-16", "单机/筛选(类型排除)", "排除符号链接",
+        "重要", "功能测试",
+        "验证 --filter-exclude-type 'l' 排除符号链接",
+        "测试环境就绪",
+        f"backup srcspecial excluding symlinks",
+        f"{BINARY} backup {TMP_DIR}/srcspecial {TMP_DIR}/restore/filter_notype.bak --pack tar "
+        f"--filter-exclude-type 'l' && "
+        f"{BINARY} restore {TMP_DIR}/restore/filter_notype.bak {TMP_DIR}/restore/filter_notype_out",
+        "Restore complete!",
+        verify=f"test ! -L {TMP_DIR}/restore/filter_notype_out/srcspecial/link.txt 2>/dev/null && "
+               f"test -p {TMP_DIR}/restore/filter_notype_out/srcspecial/myfifo 2>/dev/null && "
+               f"echo OK || echo 'type filter work'")
+
+    add("FILTER-17", "单机/筛选+压缩", "名称筛选+huffman压缩组合",
+        "重要", "功能测试",
+        "验证筛选与压缩同时使用正常",
+        "测试环境就绪",
+        f"backup srcfilter: *.cpp + huffman",
+        f"{BINARY} backup {TMP_DIR}/srcfilter {TMP_DIR}/restore/filter_comp.bak --pack tar "
+        f"--compress huffman --filter-include-name '*.cpp' && "
+        f"{BINARY} restore {TMP_DIR}/restore/filter_comp.bak {TMP_DIR}/restore/filter_comp_out",
+        "Restore complete!",
+        verify=f"test -f {TMP_DIR}/restore/filter_comp_out/srcfilter/main.cpp && "
+               f"test -f {TMP_DIR}/restore/filter_comp_out/srcfilter/sub/deep.cpp && "
+               f"test ! -f {TMP_DIR}/restore/filter_comp_out/srcfilter/util.h && "
+               f"echo OK")
+
+    add("FILTER-18", "单机/筛选+加密", "排除筛选+xor加密组合",
+        "重要", "功能测试",
+        "验证筛选与加密同时使用正常",
+        "测试环境就绪",
+        f"backup srcfilter: exclude *.tmp *.log + xor",
+        f"{BINARY} backup {TMP_DIR}/srcfilter {TMP_DIR}/restore/filter_enc.bak --pack tar "
+        f"--encrypt xor --password fltpwd "
+        f"--filter-exclude-name '*.tmp' --filter-exclude-name '*.log' && "
+        f"{BINARY} restore {TMP_DIR}/restore/filter_enc.bak {TMP_DIR}/restore/filter_enc_out "
+        f"--password fltpwd",
+        "Restore complete!",
+        verify=f"test -f {TMP_DIR}/restore/filter_enc_out/srcfilter/main.cpp && "
+               f"test ! -f {TMP_DIR}/restore/filter_enc_out/srcfilter/notes.tmp && "
+               f"echo OK")
+
+    add("FILTER-19", "单机/筛选(大小单位)", "使用K/M/G单位排除",
+        "重要", "功能测试",
+        "验证 --filter-exclude-size 支持K/M/G后缀",
+        "测试环境就绪",
+        f"backup srcfilter: exclude >5K files",
+        f"{BINARY} backup {TMP_DIR}/srcfilter {TMP_DIR}/restore/filter_unit.bak --pack tar "
+        f"--filter-exclude-size '+5K' && "
+        f"{BINARY} restore {TMP_DIR}/restore/filter_unit.bak {TMP_DIR}/restore/filter_unit_out",
+        "Restore complete!",
+        verify=f"test -f {TMP_DIR}/restore/filter_unit_out/srcfilter/main.cpp && "
+               f"test ! -f {TMP_DIR}/restore/filter_unit_out/srcfilter/sub/large.dat && "
+               f"echo OK")
+
+    add("FILTER-20", "单机/筛选(空结果)", "筛选结果为空时正常完成",
+        "一般", "功能测试",
+        "验证筛选条件过于严格导致无匹配文件时程序正常完成",
+        "测试环境就绪",
+        f"backup srcfilter with impossible filter",
+        f"{BINARY} backup {TMP_DIR}/srcfilter {TMP_DIR}/restore/filter_none.bak --pack tar "
+        f"--filter-include-name '*.xyz'",
+        "Backup complete!")
+
     # ===================== 9. 健壮性测试 =====================
     add("ROBUST-01", "单机/错误密码还原", "用错误密码还原加密备份",
         "重要", "健壮性测试", "验证错误密码还原时程序不崩溃，数据损坏但不异常退出",
@@ -524,6 +733,22 @@ for i in $(seq 1 100); do echo "line_${{i}}_repeated_data_abcdefghij" >> {TMP_DI
         f"RET=$?; kill $SERVPID 2>/dev/null; "
         f"echo 'handled'",
         "handled", to=15)
+
+    add("NET-10", "网络/远程+筛选", "远程备份使用名称筛选",
+        "重要", "功能测试",
+        "验证远程备份同时使用文件筛选功能",
+        "服务器+用户就绪",
+        f"remote-backup srcfilter with name filter",
+        f"{net_start()}{BINARY} user register --server 127.0.0.1:{NET} --username netuser --password netpass > /dev/null 2>&1; "
+        f"{BINARY} remote-backup {TMP_DIR}/srcfilter --server 127.0.0.1:{NET} --username netuser --password netpass --pack tar "
+        f"--filter-include-name '*.cpp' --filter-include-name '*.h' > /dev/null 2>&1; "
+        f"{BINARY} remote-restore {TMP_DIR}/restore/net_filter_out --server 127.0.0.1:{NET} --username netuser --password netpass; "
+        f"RET=$?; kill $SERVPID 2>/dev/null; "
+        f"[ $RET -eq 0 ] && test -f {TMP_DIR}/restore/net_filter_out/srcfilter/main.cpp && "
+        f"test -f {TMP_DIR}/restore/net_filter_out/srcfilter/util.h && "
+        f"test ! -f {TMP_DIR}/restore/net_filter_out/srcfilter/notes.tmp && "
+        f"echo 'Net filter OK' || echo 'FAIL'",
+        "Net filter OK", to=60)
 
     # ===================== 10. 性能测试 =====================
     add("PERF-01", "性能/备份耗时", "大数据备份耗时测量",
