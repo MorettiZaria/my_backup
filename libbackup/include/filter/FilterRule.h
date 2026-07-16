@@ -36,6 +36,7 @@ public:
                const std::string& name, ByName);
 
     bool matches(const FileInfo& info) const override;
+    bool isExcluded(const FileInfo& info) const override;
 
     /// Deep-clone this rule
     std::unique_ptr<FilterRule> clone() const;
@@ -44,6 +45,8 @@ public:
     FilterAction    action()    const { return action_; }
 
 private:
+    FilterRule() = default;  ///< for clone(): constructs empty rule, fields set directly
+
     FilterDimension dim_;
     FilterAction    action_;
 

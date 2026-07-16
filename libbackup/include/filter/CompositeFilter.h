@@ -48,6 +48,7 @@ public:
     void addExcludeGroup(const std::string& name);
 
     bool matches(const FileInfo& info) const override;
+    bool isExcluded(const FileInfo& info) const override;
     bool isEmpty() const { return rules_.empty(); }
     void clear() { rules_.clear(); }
 

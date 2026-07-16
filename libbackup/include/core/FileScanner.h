@@ -23,9 +23,12 @@ private:
     const IFileFilter* filter_ = nullptr;
 
     /// 递归遍历
+    /// @param inIncludedSubtree true if an ancestor directory passed an include rule;
+    ///                          descendants skip include checks (only exclude applies)
     void scanRecursive(const std::string& rootPath,
                        const std::string& currentRelPath,
-                       std::vector<FileInfo>& result);
+                       std::vector<FileInfo>& result,
+                       bool inIncludedSubtree);
 
     /// 对单个目录项调用 lstat 并填充 FileInfo
     FileInfo processEntry(const std::string& fullPath,

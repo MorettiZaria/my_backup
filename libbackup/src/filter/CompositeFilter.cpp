@@ -107,6 +107,17 @@ void CompositeFilter::addExcludeGroup(const std::string& name) {
         FilterDimension::GROUP, FilterAction::EXCLUDE, name, ByName{}));
 }
 
+// ===== isExcluded() =====
+
+bool CompositeFilter::isExcluded(const FileInfo& info) const {
+    for (const auto& r : rules_) {
+        if (r->action() == FilterAction::EXCLUDE && r->matches(info)) {
+            return true;
+        }
+    }
+    return false;
+}
+
 // ===== matches() =====
 
 bool CompositeFilter::matches(const FileInfo& info) const {

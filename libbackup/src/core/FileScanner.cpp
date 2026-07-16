@@ -8,7 +8,7 @@
 
 std::vector<FileInfo> FileScanner::scan(const std::string& rootPath) {
     std::vector<FileInfo> result;
-    scanRecursive(rootPath, "", result);
+    scanRecursive(rootPath, "", result, false);
     return result;
 }
 
@@ -18,7 +18,8 @@ void FileScanner::setFilter(const IFileFilter* filter) {
 
 void FileScanner::scanRecursive(const std::string& rootPath,
                                 const std::string& currentRelPath,
-                                std::vector<FileInfo>& result) {
+                                std::vector<FileInfo>& result,
+                                bool inIncludedSubtree) {
     std::string fullPath = rootPath;
     if (!currentRelPath.empty()) {
         fullPath += "/" + currentRelPath;
@@ -49,20 +50,47 @@ void FileScanner::scanRecursive(const std::string& rootPath,
             continue;
         }
 
-        // 筛选：在被筛选掉的文件上跳过 processEntry（避免读取内容）
-        // 目录即使被筛选器拒绝，仍需递归进入以查找匹配的子文件
+        // 筛选逻辑：
+        // - 在已包含的子树中（祖先目录匹配了 include 规则）：跳过 include 检查，
+        //   只检查 exclude 规则；文件和目录都自动接受
+        // - 文件不匹配 → 跳过（不读取内容）
+        // - 目录被 include 规则筛掉 → 搁置 entry，但仍需递归（子文件可能命中 include）
+        // - 目录被 exclude 规则命中 → 搁置 entry，且跳过递归（排除整个子树）
         bool isDir = S_ISDIR(st.st_mode);
         bool filteredOut = false;
+        bool excluded = false;
+        bool subtreeIncluded = inIncludedSubtree;  // inherit from parent
+
         if (filter_ && !isDir) {
-            FileInfo prelim;
-            prelim.fromStat(st, entryRelPath);
-            if (!filter_->matches(prelim)) {
-                continue;
+            if (inIncludedSubtree) {
+                // Auto-accept: ancestor matched an include rule.
+                // Still check for explicit exclude.
+                FileInfo prelim;
+                prelim.fromStat(st, entryRelPath);
+                if (filter_->isExcluded(prelim)) {
+                    continue;
+                }
+            } else {
+                FileInfo prelim;
+                prelim.fromStat(st, entryRelPath);
+                if (!filter_->matches(prelim)) {
+                    continue;
+                }
             }
         } else if (filter_ && isDir) {
             FileInfo prelim;
             prelim.fromStat(st, entryRelPath);
-            filteredOut = !filter_->matches(prelim);
+            if (inIncludedSubtree) {
+                // Auto-accept directory; only exclude can block it
+                excluded = filter_->isExcluded(prelim);
+            } else {
+                filteredOut = !filter_->matches(prelim);
+                excluded = filter_->isExcluded(prelim);
+                // If this directory passed the filter, its children are auto-included
+                if (!filteredOut) {
+                    subtreeIncluded = true;
+                }
+            }
         }
 
         if (!filteredOut) {
@@ -70,9 +98,9 @@ void FileScanner::scanRecursive(const std::string& rootPath,
             result.push_back(info);
         }
 
-        // 如果是目录，始终递归（即使目录本身被筛掉，子文件可能命中）
-        if (isDir) {
-            scanRecursive(rootPath, entryRelPath, result);
+        // 递归进入目录，除非它被 exclude 规则显式排除（跳过整个子树）
+        if (isDir && !excluded) {
+            scanRecursive(rootPath, entryRelPath, result, subtreeIncluded);
         }
     }
 

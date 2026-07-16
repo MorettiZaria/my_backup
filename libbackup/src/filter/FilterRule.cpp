@@ -64,18 +64,26 @@ FilterRule::FilterRule(FilterDimension dim, FilterAction action,
 }
 
 std::unique_ptr<FilterRule> FilterRule::clone() const {
-    // Simple field-by-field copy — all members are trivially copyable
-    auto copy = std::make_unique<FilterRule>(dim_, action_, globPattern_);
-    copy->typeMask_  = typeMask_;
-    copy->timeOp_    = timeOp_;
-    copy->timeVal1_  = timeVal1_;
-    copy->timeVal2_  = timeVal2_;
-    copy->sizeOp_    = sizeOp_;
-    copy->sizeVal1_  = sizeVal1_;
-    copy->sizeVal2_  = sizeVal2_;
-    copy->owner_     = owner_;
-    copy->group_     = group_;
+    // Use private default constructor to avoid dimension-specific side effects
+    // (the PATH/NAME constructor resets non-PATH/non-NAME dims to NAME).
+    auto copy = std::unique_ptr<FilterRule>(new FilterRule());
+    copy->dim_        = dim_;
+    copy->action_      = action_;
+    copy->globPattern_ = globPattern_;
+    copy->typeMask_    = typeMask_;
+    copy->timeOp_      = timeOp_;
+    copy->timeVal1_    = timeVal1_;
+    copy->timeVal2_    = timeVal2_;
+    copy->sizeOp_      = sizeOp_;
+    copy->sizeVal1_    = sizeVal1_;
+    copy->sizeVal2_    = sizeVal2_;
+    copy->owner_       = owner_;
+    copy->group_       = group_;
     return copy;
+}
+
+bool FilterRule::isExcluded(const FileInfo& info) const {
+    return action_ == FilterAction::EXCLUDE && matches(info);
 }
 
 // ===== matches() dispatch =====
