@@ -2,7 +2,7 @@
 
 ## 单元测试（GTest，推荐优先运行）
 
-基于 GoogleTest v1.15.2 的白盒单元测试，覆盖 `libbackup/src` 全部 26 个生产源码文件，共 **199 个用例**。
+基于 GoogleTest v1.15.2 的白盒单元测试，覆盖 `libbackup/src` 全部 29 个生产源码文件，共 **283 个用例**。
 
 ### 编译和运行
 
@@ -31,14 +31,15 @@ ctest --output-on-failure
 | `gtest/test_huffman.cpp` | Huffman 压缩算法 | 10 |
 | `gtest/test_encrypt.cpp` | XOR + Vigenere 加密算法 | 16 |
 | `gtest/test_metadata.cpp` | MetadataSerializer + FileInfo | 16 |
-| `gtest/test_managers.cpp` | CompressManager / EncryptManager / PackManager | 12 |
+| `gtest/test_managers.cpp` | CompressManager / EncryptManager / PackManager | 13 |
 | `gtest/test_pack.cpp` | TarPackStrategy / IndexPackStrategy | 22 |
-| `gtest/test_backup_restore.cpp` | BackupEngine / RestoreEngine | 14 |
-| `gtest/test_network_nosocket.cpp` | NetworkProtocol / ServerConfig / UserManager / 等 | 35 |
-| `gtest/test_filescanner.cpp` | FileScanner | 9 |
+| `gtest/test_backup_restore.cpp` | BackupEngine / RestoreEngine | 17 |
+| `gtest/test_filter.cpp` | CompositeFilter / FilterRule / FilterParser | 84 |
+| `gtest/test_network_nosocket.cpp` | NetworkProtocol / ServerConfig / UserManager / 等 | 56 |
+| `gtest/test_filescanner.cpp` | FileScanner | 10 |
 | `gtest/test_metadata_store.cpp` | MetadataStore | 7 |
-| `gtest/test_network_loopback.cpp` | NetworkSocket 本地回环 | 14 |
-| `gtest/test_server_session.cpp` | ServerSession 集成测试 | 11 |
+| `gtest/test_network_loopback.cpp` | NetworkSocket 本地回环 | 13 |
+| `gtest/test_server_session.cpp` | ServerSession 集成测试 | 10 |
 
 ### 代码覆盖率统计
 
@@ -56,7 +57,7 @@ xcrun llvm-cov report ./tests/gtest/backup_gtest -instr-profile=coverage.profdat
     -ignore-filename-regex='(^|/)include/' -ignore-filename-regex='_deps'
 ```
 
-> 当前覆盖率：**75.15%**（排除需集成测试环境的 3 个网络模块后 **92.70%**），详见 `doc/软件测试报告.md`。
+> 当前覆盖率：**75.53%**（排除需集成测试环境的 3 个网络模块后 **89.63%**）
 
 ---
 
@@ -87,9 +88,9 @@ python3 tests/integration/run_tests.py
 | 路径 | 类型 | 大小 | 说明 |
 |------|------|------|------|
 | `hello.txt` | 普通文件 | 13 B | 简单文本 |
-| `data.txt` | 普通文件 | 21 B | 多行文本，权限 600 |
+| `data.txt` | 普通文件 | 21 B | 多行文本，权限 644 |
 | `small.txt` | 普通文件 | 5 B | 极小文件 |
-| `one_kb.txt` | 普通文件 | 1023 B | ~1KB 文本 |
+| `one_kb.txt` | 普通文件 | 1024 B | ~1KB 文本 |
 | `empty.txt` | 普通文件 | 0 B | 空文件 |
 | `random.bin` | 普通文件 | 5 KB | 随机二进制 |
 | `all_bytes.bin` | 普通文件 | 256 B | 0x00–0xFF 全覆盖 |
@@ -104,7 +105,7 @@ python3 tests/integration/run_tests.py
 | `subdir/link_to_hello` | 符号链接 | → `../hello.txt` | 相对路径链接 |
 | `subdir/deep/link_to_data` | 符号链接 | → `../../data.txt` | 深层相对链接 |
 | `broken_link` | 符号链接 | → `/nonexistent/path` | 指向不存在目标的链接 |
-| `myfifo` | 管道 FIFO | — | 命名管道 |
+| `myfifo` | 管道 FIFO | — | 命名管道（需 `mkfifo` 创建，不在 git 中） |
 
 ---
 
@@ -298,7 +299,7 @@ test -p /tmp/test_restore_remote/myfifo && echo "FIFO OK"
 
 # 验证文件权限
 stat -c '%a' /tmp/test_restore_remote/data.txt
-# 预期: 600
+# 预期: 644
 ```
 
 ### 测试 N5：列出备份
